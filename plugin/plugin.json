@@ -5,7 +5,7 @@
   "author": {
     "name": "AgentProof contributors"
   },
-  "repository": "https://github.com/masalnik_MSDEMO/AgentProof",
+  "repository": "https://github.com/msft-common-demos/AgentProof",
   "license": "MIT",
   "keywords": ["github-copilot", "release-evidence", "human-approval", "policy", "security"],
   "agents": ["./agents/"],

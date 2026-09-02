@@ -22,21 +22,18 @@ For a live development load from the repository root:
 copilot --plugin-dir ./plugin
 ```
 
-To exercise the repository marketplace:
+To install the published private repository marketplace:
 
 ```text
-copilot plugin marketplace add .
-copilot plugin marketplace browse agentproof-marketplace
+copilot plugin marketplace add msft-common-demos/AgentProof
 copilot plugin install agentproof@agentproof-marketplace
 ```
 
-After publishing the private repository, install the plugin subdirectory with:
-
-```text
-copilot plugin install OWNER/REPOSITORY:plugin
-```
-
-Repository installs are cached; run `copilot plugin update agentproof` or reinstall when validating unpublished changes. Directory-sourced marketplace and `--plugin-dir` loads are live and take effect in the next session.
+Marketplace installs are cached; run `copilot plugin marketplace update
+agentproof-marketplace` and `copilot plugin update agentproof` when validating a
+new published version. Direct repository installs currently work but are
+deprecated. Development `--plugin-dir` loads are live and take effect in the
+next session.
 
 ## Evidence Board actions
 

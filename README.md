@@ -13,6 +13,9 @@ bounded exception.
 AgentProof produces evidence, not a legal, privacy, security, or regulatory
 certification. The demo contains no customer data.
 
+Reference implementation: <https://github.com/msft-common-demos/AgentProof>.
+Files under `templates/` retain `<OWNER>/<REPO>` placeholders for reuse.
+
 ## Roles
 
 | Role                                 | Responsibility                                                                                                |
@@ -74,8 +77,8 @@ before a customer deployment or recording.
 ## Install and verify
 
 ```bash
-git clone https://github.com/<OWNER>/<REPO>.git
-cd <REPO>
+git clone https://github.com/msft-common-demos/AgentProof.git
+cd AgentProof
 npm ci
 npm run check
 ```

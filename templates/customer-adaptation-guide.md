@@ -7,17 +7,18 @@ repository class.
 
 ## 1. Define the bounded use case
 
-| Decision                                | Customer-approved value |
-| --------------------------------------- | ----------------------- |
-| Repository class and owners             | `<VALUE>`               |
-| Change/release boundary                 | `<VALUE>`               |
-| Data classification and prohibited data | `<VALUE>`               |
-| Regulatory/legal interpretation owner   | `<PERSON_OR_TEAM>`      |
-| Release manager(s)                      | `<PERSON_OR_TEAM>`      |
-| Independent reviewer(s)                 | `<PERSON_OR_TEAM>`      |
-| Automation owner and backup             | `<PERSON_OR_TEAM>`      |
-| Evidence/log/artifact retention         | `<VALUE>`               |
-| Recovery and break-glass process        | `<REFERENCE>`           |
+| Decision                                 | Customer-approved value |
+| ---------------------------------------- | ----------------------- |
+| Repository class and owners              | `<VALUE>`               |
+| Change/release boundary                  | `<VALUE>`               |
+| Data classification and prohibited data  | `<VALUE>`               |
+| Regulatory/legal interpretation owner    | `<PERSON_OR_TEAM>`      |
+| Release manager(s)                       | `<PERSON_OR_TEAM>`      |
+| Independent reviewer(s)                  | `<PERSON_OR_TEAM>`      |
+| Manual reviewer-session owner and backup | `<PERSON_OR_TEAM>`      |
+| Future automation owner and backup       | `<PERSON_OR_TEAM>`      |
+| Evidence/log/artifact retention          | `<VALUE>`               |
+| Recovery and break-glass process         | `<REFERENCE>`           |
 
 Exclude customer data from the first trial. If later evidence contains source,
 logs, vulnerability details, or personal data, complete the customer's data
@@ -57,19 +58,41 @@ Passing means only that these configured rules passed for the identified SHA.
 
 ## 4. Set least privilege
 
-Review the actual GitHub workflow permissions and each live personal
-automation's selected tools. Maintain the split:
+The current MVP uses manually started installed AgentProof reviewer sessions.
+Verify the plugin source/version and exact reviewer identity, and maintain the
+split:
 
 - untrusted PR execution: no secrets and read-only;
 - trusted publisher: only required check/comment writes and no PR execution;
-- specialist automations: repository/PR/check/evidence read plus one bounded
-  comment write;
+- manual specialist reviewers: repository/PR/check/evidence read only, scoped
+  to one current full head SHA;
 - no agent push, merge, approval, exception acceptance, secret access,
   deployment, or cross-repository access.
 
-Enterprise-managed App settings and per-automation tool scope are separate.
-Automations are personal and stored outside Git; define ownership transfer and
-periodic review.
+A human controls publication and starts the Evidence Assembler. Preserve
+`pass`, `fail`, `unknown`, and `exception` as distinct evidence states.
+
+The files in `templates/automations/` are future experimental inputs, not live
+configuration. **Do not save an automation** unless:
+
+1. the exact installed AgentProof custom reviewer is available in the Agent
+   picker, with its approved source and version visible;
+2. tools can start from select-none or an approved preset;
+3. an effective-permission preview proves the exact least-privilege read scope
+   and any separate bounded publication behavior; and
+4. push, merge, approval, exception, secrets, deployment, cross-repository,
+   unrelated MCP, and broad shell/network capabilities are absent.
+
+On 2026-09-02, AgentProof `v0.1.0` did not pass this gate: the Pull request
+automation Agent picker showed only **Default** and **msx**, and Tools defaulted
+to **All tools selected** without a safe clear-all path. The draft was
+cancelled.
+
+If a future product version passes the gate, the automation remains personal
+and stored outside Git. Enterprise-managed settings and effective
+per-automation tool scope are separate. Require human review/confirmation,
+version/admin visibility, ownership transfer, inventory, and periodic
+revalidation.
 
 ## 5. Design human decisions
 
@@ -85,6 +108,8 @@ authoritative approval. GitHub remains the system of record.
 
 Run on disposable/synthetic PRs first:
 
+- manually start each installed custom reviewer; do not substitute a default
+  agent for a missing AgentProof agent;
 - red gate and missing independent review block separately;
 - unauthorized, malformed, stale, overlong, edited, deleted, and expired
   decisions remain blocking;
@@ -103,5 +128,6 @@ target an achieved outcome.
 Obtain named approval from repository/platform, security, privacy/legal/data,
 and release owners as applicable. Record remaining risks, support ownership,
 retention/deletion, monitoring, product-version dependencies, rollback, and
-training. No adaptation makes AgentProof's compliance or provenance claims
+training. Reviewer and scanner output is not a legal or compliance
+determination, and no adaptation makes AgentProof's provenance claims
 universal.

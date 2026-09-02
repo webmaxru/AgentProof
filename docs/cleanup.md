@@ -1,22 +1,31 @@
 # Cleanup
 
-Cleanup must cover the App and GitHub; deleting local files does not remove
-personal automations or remote evidence.
+Cleanup must cover the App and GitHub; deleting local files does not remove App
+sessions, a future personal automation, or remote evidence.
+
+The 2026-09-02 validation draft was cancelled, and no AgentProof automation was
+saved. Do not report three live automations or invent automation cleanup work.
 
 ## Copilot App
 
-1. Disable and then delete the personal Test, Security, and Policy automations.
-2. Confirm no scheduled/manual automation remains for `<OWNER>/<REPO>`.
-3. Close disposable specialist, assembler, and remediation sessions according
-   to the organization's retention policy.
-4. Clear Evidence Board state. Remember that clearing a mutable canvas does not
+1. Inspect the current user's automation inventory for `<OWNER>/<REPO>`.
+2. If a later gated experiment was actually saved, disable and delete that
+   specific personal automation, then record only non-sensitive confirmation.
+   Do not assume Test, Security, or Policy automations exist.
+3. Confirm no personal automation remains for the repository.
+4. Close disposable manual reviewer, assembler, and remediation sessions
+   according to the organization's retention policy.
+5. Clear Evidence Board state. Remember that clearing a mutable canvas does not
    delete GitHub records.
-5. Uninstall the development/marketplace AgentProof plugin if it is no longer
-   approved or needed.
-6. Remove any saved deep-link bookmarks and manual automation inventory entry.
+6. Uninstall AgentProof `v0.1.0` or its replacement if it is no longer approved
+   or needed.
+7. Remove obsolete deep-link bookmarks. Remove an automation inventory entry
+   only if an automation had actually been saved.
 
-Automations are personal and stored outside Git, so repeat these steps for each
-owner who created one.
+A future automation is personal and stored outside Git, so repeat its
+inspection and cleanup for every owner who actually created one. A deep link
+must always require review and confirmation; deleting a template does not
+disable an external configuration.
 
 ## GitHub
 
@@ -45,7 +54,8 @@ delete shared Node/npm caches as part of this project cleanup.
 
 ## Verify
 
-- No personal automation targets the retired repository.
+- No personal automation targets the retired repository; the cancelled
+  2026-09-02 draft is not listed as one.
 - No plugin development install remains.
 - No open PR, branch, ruleset bypass, environment, or temporary collaborator
   remains unintentionally.
@@ -53,4 +63,5 @@ delete shared Node/npm caches as part of this project cleanup.
 - No customer data, token, tenant URL, or secret was introduced.
 
 Cleanup removes the prototype; it does not retroactively revoke copies already
-downloaded by authorized repository readers.
+downloaded by authorized repository readers. It also does not turn reviewer or
+scanner output into a legal or compliance determination.

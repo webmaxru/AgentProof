@@ -1,19 +1,18 @@
 # AgentProof
 
-AgentProof turns AI-assisted code from any model into a governed release
-decision. On each pull request, deterministic collectors produce test,
-dependency, and policy evidence bound to the exact head commit. Three
-least-privilege GitHub Copilot App sessions review the same evidence as test,
-security, and policy specialists. A mutable Evidence Board coordinates their
-results; GitHub commits, checks, comments, reviews, and retained artifacts
-remain authoritative.
+AgentProof is a model-neutral, SHA-bound release-evidence kit. PR-triggered
+GitHub Actions deterministically publish `AgentProof / gate`, an artifact, and a
+PR summary. That path succeeded in the private live repository on 2026-09-02,
+and the plugin installed through its `agentproof-marketplace`.
 
-Unresolved failures, unknowns, and exceptions block `AgentProof / gate`.
-Eligible exceptions require an authorized, reasoned, expiring PR comment tied
-to the current SHA. Any remediation commit invalidates the prior decision, and
-repository rules still require independent human approval before merge.
+The working MVP then requires a user to manually start three isolated, read-only
+reviewer sessions through installed agents or confirmed deep links and manually
+run the Evidence Assembler. The resulting Evidence Board is mutable; GitHub
+records remain authoritative. No live personal reviewer automations are
+claimed—the App picker did not expose the agents and defaulted to All tools, so
+setup was canceled. Automation templates are future setup/product feedback.
 
-The reusable kit includes an installable plugin, policy and evidence contracts,
-automation prompts, setup and cleanup guides, templates, and a wholly synthetic
-expense-approval scenario. It provides evidence—not universal provenance,
-security assurance, or compliance certification.
+`pass`, `fail`, `unknown`, and `exception` remain distinct. Unresolved findings
+block; a new SHA invalidates prior evidence. Independent human approval is still
+required. This is evidence, not provenance, security, or compliance
+certification.

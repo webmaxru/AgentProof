@@ -1,9 +1,38 @@
-# Policy Reviewer automation template
+# Policy Reviewer gated automation template
 
-This file is a versioned setup input, **not automation-as-code**. The live
-automation is personal, single-repository scoped, and stored outside Git.
+> **Status: future experiment; not live or validated.** The manual MVP starts
+> the installed AgentProof Policy Reviewer directly in a read-only Copilot App
+> session. This file is a versioned setup input, **not automation-as-code**.
 
-## Configuration record
+On 2026-09-02, the Pull request automation picker did not show the installed
+AgentProof reviewers; it showed only **Default** and **msx**. Tools defaulted to
+**All tools selected**, with no safe clear-all path in the validated flow. The
+draft was cancelled and no automation was saved.
+
+## Mandatory save gate
+
+**Do not save this automation unless all checks pass:**
+
+- **AgentProof Policy Reviewer** is explicitly selectable and selected, with the
+  approved plugin source and version visible. Do not substitute **Default** or
+  **msx**.
+- Tool selection starts from select-none or an approved least-privilege preset.
+- An effective-permission preview shows only the required repository, PR, diff,
+  check, and same-SHA evidence reads.
+- Any comment publication is a separately visible, bounded update to one
+  marker-delimited comment. If that cannot be verified, keep publication
+  manual and grant the reviewer no mutation tool.
+- Push, merge, approval, branch/issue mutation, secrets, deployment,
+  cross-repository access, unrelated MCP, and broad shell/network tools are
+  absent.
+- A human reviews and confirms the personal, single-repository, outside-Git
+  configuration.
+
+If any check is unavailable or ambiguous, cancel the draft. The prompt below
+remains a future target and a manual-review checklist; it is not evidence that
+the automation can run safely.
+
+## Target configuration record
 
 - Repository: `<OWNER>/<REPO>`
 - Events: PR opened and synchronized
@@ -11,8 +40,8 @@ automation is personal, single-repository scoped, and stored outside Git.
 - Path filter: `policy/**`, `sample-repo/config/**`, PR metadata, and relevant
   source/test files
 - Agent: AgentProof Policy Reviewer
-- Allow: reviewer repository/PR/diff/check/artifact read; automation publisher
-  update of one PR comment
+- Allow: reviewer repository/PR/diff/check/artifact read; separately verified
+  bounded publisher update of one PR comment, or manual publication
 - Deny: push, merge, approval, branch/issue mutation, secrets, deployment,
   cross-repository access, unrelated MCP, broad shell/network tools
 
@@ -79,5 +108,8 @@ State explicitly: "Advisory only; this is not a compliance determination.
 AgentProof / gate and native GitHub records are authoritative."
 ```
 
-Review and confirm any deep link before saving. Test a PR that changes policy
-and verify the session still cites protected-base policy.
+Review and confirm any deep link. Apply the mandatory save gate before saving.
+If a future experiment passes it, test a synthetic PR that changes policy and
+verify the session still cites protected-base policy. Never include secrets or
+customer data, and never present the result as a legal or compliance
+determination.

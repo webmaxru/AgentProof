@@ -6,9 +6,10 @@
 AgentProof is a model-neutral field kit for a synthetic expense-approval
 repository. Deterministic collectors evaluate tests, dependency risk, and a
 data-retention declaration for one pull-request head SHA. GitHub publishes the
-required `AgentProof / gate` check; specialist Copilot App sessions explain the
-evidence; a release manager decides whether to remediate or accept an eligible,
-bounded exception.
+required `AgentProof / gate` check. After that check completes, a user manually
+starts three isolated, read-only Copilot App sessions to explain the evidence,
+then runs the Evidence Assembler manually. A release manager decides whether to
+remediate or accept an eligible, bounded exception.
 
 AgentProof produces evidence, not a legal, privacy, security, or regulatory
 certification. The demo contains no customer data.
@@ -18,14 +19,14 @@ Files under `templates/` retain `<OWNER>/<REPO>` placeholders for reuse.
 
 ## Roles
 
-| Role                                 | Responsibility                                                                                                |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| Developer or agent operator          | Opens the PR, declares known assistance, and remediates findings.                                             |
-| Test, security, and policy reviewers | Read the same SHA-bound facts and publish advisory specialist notes. They cannot approve exceptions or merge. |
-| Release manager                      | Records an authorized, reasoned disposition for an eligible finding.                                          |
-| Independent reviewer                 | Reviews the resulting code and approves the PR; must not be the author or automation owner.                   |
-| Repository administrator             | Protects workflows and policy, configures the ruleset, and scopes App/automation access.                      |
-| Field practitioner                   | Installs the kit and adapts its synthetic policy to a customer-approved use case.                             |
+| Role                                 | Responsibility                                                                                                                              |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Developer or agent operator          | Opens the PR, declares known assistance, and remediates findings.                                                                           |
+| Test, security, and policy reviewers | Manually start isolated, read-only sessions on the same SHA-bound facts and return advisory notes. They cannot approve exceptions or merge. |
+| Release manager                      | Records an authorized, reasoned disposition for an eligible finding.                                                                        |
+| Independent reviewer                 | Reviews the resulting code and approves the PR; must not be the author or release decision-maker.                                           |
+| Repository administrator             | Protects workflows and policy, configures the ruleset, and scopes App/session access.                                                       |
+| Field practitioner                   | Installs the kit and adapts its synthetic policy to a customer-approved use case.                                                           |
 
 One person may fill several operational roles outside production, but the demo
 uses a separate account or team for independent approval.
@@ -45,10 +46,13 @@ protected-base evaluator + policy --> AgentProof / gate
                                       |
                     +-----------------+-----------------+
                     |                                   |
-          specialist App sessions            authorized PR comment
+       manual read-only App sessions          authorized PR comment
                     |                                   |
-                    +----------> Evidence Board <-------+
-                                  (mutable view)
+                    +----> manual Evidence Assembler <--+
+                                  |
+                                  v
+                             Evidence Board
+                             (mutable view)
 
 Authoritative record: GitHub commit, check, PR comments/reviews, and evidence artifact
 ```
@@ -65,7 +69,8 @@ execute PR-controlled code. See [architecture](docs/architecture.md),
 - A private GitHub.com repository, represented below as `<OWNER>/<REPO>`, with
   GitHub Actions and repository rulesets (or equivalent branch protection).
 - GitHub Copilot App/CLI access with cloud sessions, plugins, canvas
-  extensions, and automations enabled for the intended users.
+  extensions, and installed-agent or deep-link session launch for the intended
+  users.
 - Permission to manage repository Actions and rules, plus a distinct reviewer
   account or team such as `<RELEASE_REVIEWER_OR_TEAM>`.
 - Only synthetic, non-secret demo data.
@@ -107,11 +112,13 @@ owners.
 3. Review `policy/release-policy.yml`; a PR is evaluated against protected base
    policy rather than policy weakened by that same PR.
 4. Enable the workflows and open a harmless PR once so the
-   `AgentProof / gate` check becomes selectable.
+   PR-triggered `AgentProof Analysis` and `AgentProof Publish` workflows run and
+   the `AgentProof / gate` check becomes selectable.
 5. Create a ruleset for `<DEFAULT_BRANCH>` that requires:
    - pull requests;
    - `AgentProof / gate`;
-   - at least one approval from someone other than the author/automation owner;
+   - at least one approval from someone other than the author/release
+     decision-maker;
    - stale approval dismissal;
    - code-owner review for workflows, policy, plugin, and evidence code;
    - resolved conversations; and
@@ -123,59 +130,85 @@ owners.
 Exact instructions and acceptance tests are in
 [GitHub setup](docs/github-setup.md).
 
-## Copilot App and automation setup
+## Copilot App reviewer setup
 
-Install the local/repository plugin through the Copilot App, then verify that
-the Test Reviewer, Security Reviewer, Policy Reviewer, Evidence Assembler, two
-skills, and Evidence Board are discoverable.
+The working MVP uses manually started reviewer sessions; it does not depend on
+personal PR automations. Use the supported marketplace flow confirmed by the
+live validation:
 
 ```text
-copilot plugin install ./plugin
+copilot plugin marketplace add msft-common-demos/AgentProof
+copilot plugin install agentproof@agentproof-marketplace
 ```
 
-For a cached development install, uninstall `agentproof` and reinstall the
-local path. Plugin installation—whether initiated by command, marketplace, or
-deep link—still requires the user's authorized confirmation.
+This installed AgentProof v0.1.0 and its two skills. Plugin installation and
+every deep-link launch still require the user's authorized confirmation. A
+direct repository install from `msft-common-demos/AgentProof:plugin` also worked,
+but that flow is deprecated and is not setup guidance.
 
-Create **three separate** PR-triggered cloud automations from:
+After `AgentProof Analysis` and `AgentProof Publish` produce the check, artifact,
+and PR summary for the current head SHA:
+
+1. Manually start three separate, isolated sessions with the installed Test
+   Reviewer, Security Reviewer, and Policy Reviewer agents, or use their deep
+   links.
+2. Review and confirm each launch. Grant only repository, PR, check, and artifact
+   read tools. If the UI defaults to **All tools** and cannot be safely reduced,
+   cancel rather than save or launch an over-privileged configuration.
+3. Confirm that every result names the full current head SHA.
+4. Manually run the Evidence Assembler after all three reviewers finish; reject
+   mixed-SHA inputs before loading the mutable Evidence Board.
+
+The checked-in reviewer prompts are product-feedback and future-setup templates,
+not active automations:
 
 - [Test Reviewer prompt](templates/automations/test-reviewer.md)
 - [Security Reviewer prompt](templates/automations/security-reviewer.md)
 - [Policy Reviewer prompt](templates/automations/policy-reviewer.md)
 
-Scope each to `<OWNER>/<REPO>`, PR opened/synchronized events, and only the read
-and PR-comment tools listed in the template. Cloud automations are personal,
-stored outside Git, and not installed by these Markdown files. Repository
-templates are reviewable setup inputs only. App deep links prefill supported
-flows but require the user to inspect and confirm the action; they never
-silently install a plugin, create an automation, or start a session.
+On 2026-09-02, the private live repository
+`msft-common-demos/AgentProof` successfully ran the PR-triggered deterministic
+Analysis/Publish path and produced the SHA-bound `AgentProof / gate`, artifact,
+and PR summary. The marketplace flow above installed AgentProof v0.1.0 and its
+two skills; that success does not establish reviewer-agent availability in the
+automation picker. In the Copilot App **New PR automation** dialog, the installed
+AgentProof reviewers did not appear in the agent picker (only Default and msx
+appeared), and tool scope defaulted to **All tools** with no safe clear-all path
+found. The dialog was canceled without saving. AgentProof therefore does not
+claim three live personal reviewer automations.
 
-Follow [automation setup](docs/automation-setup.md). Use
-[enterprise settings](docs/enterprise-settings-example.md) only as an example:
-centrally managed App settings and each automation's selected tool scope are
-separate control layers.
+Treat [automation setup](docs/automation-setup.md) and
+[enterprise settings](docs/enterprise-settings-example.md) as future setup and
+product-feedback references only. App deep links may prefill a supported flow,
+but they never silently install a plugin, create an automation, or start a
+session.
 
 ## End-to-end workflow
 
-1. Open or synchronize a PR. Keep exactly one origin classification in the PR
-   template: `github-attributed`, `self-declared`, or `unknown`. This is not
-   universal model provenance.
+1. Open or synchronize a PR, which triggers the GitHub Actions analysis and
+   publish path. Keep exactly one origin classification in the PR template:
+   `github-attributed`, `self-declared`, or `unknown`. This is not universal
+   model provenance.
 2. `AgentProof Analysis` executes the untrusted subject in an ephemeral runner
    with no secrets and read-only repository/PR access. It emits normalized raw
    evidence even when a finding blocks.
 3. `AgentProof Publish` validates repository, PR, workflow, schema, base SHA,
    and live head SHA; applies protected-base policy; and publishes one
    `AgentProof / gate` check plus one marker-delimited PR summary.
-4. The three personal App automations open visible, isolated specialist
-   sessions. Each resolves the current head SHA, stays within its specialty,
-   refuses stale/mixed evidence, and posts one advisory result.
-5. Run the Evidence Assembler manually after all three finish. It rejects mixed
-   SHAs and loads one document into the Evidence Board.
+4. After the deterministic check completes, a user manually starts three
+   visible, isolated, read-only specialist sessions with the installed agents or
+   confirmed deep links. Each resolves the current head SHA, stays within its
+   specialty, refuses stale/mixed evidence, and returns one advisory result.
+5. The user runs the Evidence Assembler manually after all three finish. It
+   rejects mixed SHAs and loads one document into the Evidence Board.
 6. A human chooses remediation or, for an exceptionable finding only, records a
    bounded exception on the PR.
 7. A remediation commit creates a new head SHA. Earlier dispositions, evidence,
    and stale approvals no longer satisfy the new revision.
-8. Evidence reruns. Record any still-needed exception against the new SHA.
+8. The PR-triggered Actions evidence reruns. Before relying on specialist advice
+   for the new revision, manually start fresh reviewer sessions and assemble
+   only their same-SHA results. Record any still-needed exception against the
+   new SHA.
 9. A different human approves. The ruleset exposes merge only when both the
    gate and independent review are satisfied.
 
@@ -283,9 +316,12 @@ Measure a baseline and a trial; do not report targets as achieved results.
 ## Limitations
 
 - This prototype covers one GitHub repository and a small synthetic policy.
-- App cloud automations are personal, single-repository scoped, and stored
-  outside Git; templates do not provide automation-as-code or central history.
-- Deep links require confirmation.
+- The working MVP has no live personal reviewer automations. Its three reviewer
+  sessions and Evidence Assembler are manually started after deterministic
+  checks complete.
+- Automation prompt templates are future setup/product-feedback inputs, not
+  automation-as-code or proof that an automation exists.
+- Deep links and installed-agent launches require user review and confirmation.
 - External tool/model origin may be self-declared or unknown.
 - npm advisory availability, runner/network health, and report quality may
   produce `unknown`.
@@ -305,9 +341,12 @@ Measure a baseline and a trial; do not report targets as achieved results.
   evidence and comment; rerun and re-record the decision for the new SHA.
 - **Collector is `unknown`:** inspect the workflow log and machine-readable
   report; do not convert tool/network failure into pass.
-- **Automation did not start:** verify its owner still has access, the personal
-  automation is enabled, the repository/event/path filter matches, and the
-  trigger author has write access where that safety default applies.
+- **Reviewer is absent from the PR automation picker:** this is the validated
+  MVP limitation, not evidence that an automation exists. Start a manual
+  installed-agent session or confirmed deep link instead. If a safe read-only
+  tool set cannot be selected, cancel.
+- **Manual reviewer has the wrong SHA:** discard its output and start a fresh
+  session only after the current deterministic check completes.
 - **Plugin/canvas appears cached:** remove the development install, reinstall
   the current plugin version, and verify the built extension entry.
 - **Mixed-SHA assembly:** discard old fragments and rerun every specialist
@@ -320,8 +359,9 @@ Measure a baseline and a trial; do not report targets as achieved results.
 - Exact competition sequence: [storyboard](demo/storyboard.md) and
   [runbook](demo/runbook.md)
 - Clearly labeled continuity assets: [fallback guidance](demo/fallback/README.md)
-- Remove the personal automations, plugin, ruleset, branches, artifacts, and
-  synthetic repository by following [cleanup](docs/cleanup.md).
+- Remove the manual sessions, plugin, ruleset, branches, artifacts, any future
+  automation experiments, and synthetic repository by following
+  [cleanup](docs/cleanup.md).
 
 ## Provenance and license
 

@@ -12,13 +12,13 @@
 
 ## Trust boundaries
 
-| Zone                                                             | Trust level          | Rule                                                                                                                                |
-| ---------------------------------------------------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| PR code, package scripts, PR body, comments, and model prose     | Untrusted input      | Parse narrowly; execute only in a no-secret, read-only analysis job.                                                                |
-| Protected base workflows, scripts, evaluator, schema, and policy | Trusted enforcement  | CODEOWNERS and ruleset protect changes; publisher runs only this revision.                                                          |
-| App reviewer sessions                                            | Advisory             | Reviewer is read-only; the automation publisher may update one bounded comment. Neither can approve, push, merge, or mutate policy. |
-| Evidence Board                                                   | Mutable coordination | Never accepted as an approval, signature, or immutable audit record.                                                                |
-| Native GitHub commit/check/comment/review/artifact               | Authoritative record | Validate current state and SHA; retain/export according to approved policy.                                                         |
+| Zone                                                             | Trust level          | Rule                                                                                                                                     |
+| ---------------------------------------------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| PR code, package scripts, PR body, comments, and model prose     | Untrusted input      | Parse narrowly; execute only in a no-secret, read-only analysis job.                                                                     |
+| Protected base workflows, scripts, evaluator, schema, and policy | Trusted enforcement  | CODEOWNERS and ruleset protect changes; publisher runs only this revision.                                                               |
+| App reviewer sessions                                            | Advisory             | User-confirmed manual sessions are read-only and return advisory fragments. They cannot comment, approve, push, merge, or mutate policy. |
+| Evidence Board                                                   | Mutable coordination | Never accepted as an approval, signature, or immutable audit record.                                                                     |
+| Native GitHub commit/check/comment/review/artifact               | Authoritative record | Validate current state and SHA; retain/export according to approved policy.                                                              |
 
 ## Threats, controls, and residual risk
 
@@ -35,7 +35,14 @@
 | Claimed model provenance is false                               | Only `github-attributed`, `self-declared`, or `unknown`; provenance does not affect verified gate facts                      | Universal authorship detection is unsolved and explicitly not claimed.                                                                                           |
 | Dependency service/report is unavailable                        | Collector emits `unknown`; gate fails closed                                                                                 | Availability can block merge. Establish an authorized, bounded outage process rather than silently passing.                                                      |
 | Sensitive data leaks through prompt/comment/artifact/log        | Synthetic demo, bounded fields, no secrets, minimum logging, prompt review                                                   | Production adoption needs data classification, retention, regional, and incident controls outside this kit.                                                      |
-| Author or automation self-approves                              | Ruleset requires distinct human approval and dismisses stale reviews                                                         | Small teams need a documented independent-review rota or cannot use this control as designed.                                                                    |
+| Author or release decision-maker self-approves                  | Ruleset requires distinct human approval and dismisses stale reviews                                                         | Small teams need a documented independent-review rota or cannot use this control as designed.                                                                    |
+
+Manual App launch is also a trust decision. Start reviewers only after the
+deterministic check exists, inspect every installed-agent or deep-link
+confirmation, and allow only the required read tools. If the UI defaults to
+**All tools** and offers no safe way to clear or reduce them, cancel. The
+checked-in automation prompts are future setup/product-feedback templates, not
+evidence of deployed controls.
 
 ## Least privilege
 
@@ -44,9 +51,10 @@
   required to publish validated results; it never runs PR code.
 - **Disposition/revalidation:** read current PR/comment state and dispatch trusted
   analysis; they do not approve exceptions themselves.
-- **App automations:** repository, PR, check/artifact read and bounded PR-comment
-  write only. Disable push, merge, issue mutation, secrets, cross-repository,
-  and unrelated MCP access.
+- **Manual App reviewers:** repository, PR, check, and artifact read only.
+  Disable comments, push, merge, issue mutation, secrets, cross-repository, and
+  unrelated MCP access. Run the Evidence Assembler manually after all three
+  same-SHA fragments exist.
 
 Review the actual workflow `permissions` blocks and App tool selections; prose
 cannot grant or constrain access.

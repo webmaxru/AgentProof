@@ -20,8 +20,23 @@ output.
 - Session/deep links: `<TEST>`, `<SECURITY>`, `<POLICY>`, `<ASSEMBLER>`,
   `<REMEDIATION>`
 
-Deep links require the presenter to review and confirm; open all needed tabs in
-advance rather than implying a link silently creates a session or automation.
+Reviewer sessions and the Evidence Assembler are manual. Installed-agent and
+deep-link launches require the presenter to review and confirm; open all needed
+tabs in advance rather than implying that a link silently creates a session or
+automation.
+
+## Validated live baseline
+
+On 2026-09-02, PR-triggered `AgentProof Analysis` and `AgentProof Publish`
+succeeded in the private live repository and produced the full-SHA-bound
+`AgentProof / gate`, artifact, and PR summary. The plugin installed from
+`msft-common-demos/AgentProof:plugin`.
+
+The Copilot App **New PR automation** picker did not expose the installed
+AgentProof reviewers (only Default and msx appeared). Tools defaulted to **All
+tools**, and no safe clear-all path was found. The dialog was canceled without
+saving. Do not narrate three personal automations; the working sequence uses
+three isolated, manually started, read-only sessions.
 
 ## T-24 hours
 
@@ -37,9 +52,12 @@ advance rather than implying a link silently creates a session or automation.
    retention declaration.
 5. Exercise unauthorized, stale-SHA, edit/delete, expiry, red-with-approval, and
    green-without-approval acceptance tests.
-6. Confirm action pins, workflow permissions, personal automation tools, and
-   ruleset. Confirm no secret/customer data exists.
-7. Cold-review the 2:54 storyboard with one technical and one non-technical
+6. Confirm action pins, workflow permissions, manual reviewer read scopes, and
+   ruleset. If a launch cannot be limited from **All tools**, cancel it. Confirm
+   no secret/customer data exists.
+7. Confirm automation prompts are labeled future setup/product feedback and no
+   live reviewer automation is claimed.
+8. Cold-review the 2:54 storyboard with one technical and one non-technical
    viewer.
 
 ## T-30 minutes
@@ -49,27 +67,34 @@ advance rather than implying a link silently creates a session or automation.
 2. Sign in presenter/release manager in the main profile and independent
    reviewer in an isolated profile.
 3. Set zoom so SHA, check name, finding states, and captions are readable.
-4. Open tabs in storyboard order:
+4. Wait for the unsafe head's deterministic Analysis/Publish path to complete.
+   Then manually start the installed Test, Security, and Policy agents in three
+   isolated, read-only sessions (or review and confirm their deep links).
+5. Match every session to the full unsafe head SHA, manually run the Evidence
+   Assembler, and load the resulting document into the mutable Evidence Board.
+6. Open tabs in storyboard order:
    - unsafe PR body and red `AgentProof / gate`;
-   - three specialist session results;
+   - three manually started specialist session results;
    - Evidence Board loaded with unsafe-head evidence;
    - release-manager PR comment box;
    - remediation session with the real diff ready to push;
    - Actions/PR view ready to show stale and then fresh evidence;
    - independent-review profile;
    - README/templates and three-slide outline.
-5. Copy the exact unsafe and expected remediated SHAs into presenter-only notes.
-6. Pre-type only the allowed exception skeleton; verify finding ID, full live
+7. Copy the exact unsafe and expected remediated SHAs into presenter-only notes.
+8. Pre-type only the allowed exception skeleton; verify finding ID, full live
    SHA, rationale, and expiry immediately before submission.
-7. Start recording at the PR, not a title slide.
+9. Start recording at the PR, not a title slide.
 
 ## Exact live sequence
 
 Follow `demo/storyboard.md` without adding time:
 
 1. **0:00:** show unsafe SHA/origin and red gate.
-2. **0:14:** show check evidence and all three same-SHA sessions.
-3. **0:31:** show three findings and mutable-canvas authority banner.
+2. **0:14:** show check evidence and all three manually started, read-only,
+   same-SHA sessions.
+3. **0:31:** show the manual assembly result, three findings, and mutable-canvas
+   authority banner.
 4. **0:51:** submit the retention exception:
 
    ```text
@@ -94,12 +119,15 @@ Follow `demo/storyboard.md` without adding time:
 
 - Stop if a displayed evidence/check/comment SHA differs from the live PR head.
 - Stop if any specialist fragment is for another SHA.
+- Stop if a reviewer was started before the deterministic check completed or
+  has more than the required read tools.
 - Stop if an account, notification, secret, customer/tenant identifier, or
   unrelated content appears.
 - Stop if ruleset or check behavior differs from the narration.
 - Do not call a network/tool failure a pass.
 - Do not say “compliant,” “secure,” “verified author,” “immutable canvas,”
-  “automation-as-code,” or “automatic approval.”
+  “automation-as-code,” “three live reviewer automations,” or “automatic
+  approval.”
 
 ## Continuity fallback
 

@@ -10,5 +10,5 @@
   "keywords": ["github-copilot", "release-evidence", "human-approval", "policy", "security"],
   "agents": ["./agents/"],
   "skills": ["./skills/"],
-  "extensions": ["./extensions/evidence-board/dist/"]
+  "extensions": "./extensions/"
 }

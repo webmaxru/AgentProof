@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const sourceRoot = join(packageRoot, "src");
-const outputRoot = join(packageRoot, "dist");
+const outputRoots = [packageRoot, join(packageRoot, "dist")];
 const files = [
   ["model.ts", "model.js"],
   ["reducer.ts", "reducer.js"],
@@ -14,7 +14,7 @@ const files = [
   ["extension.ts", "extension.mjs"],
 ];
 
-await mkdir(outputRoot, { recursive: true });
+await Promise.all(outputRoots.map((outputRoot) => mkdir(outputRoot, { recursive: true })));
 
 for (const [sourceName, outputName] of files) {
   const source = await readFile(join(sourceRoot, sourceName), "utf8");
@@ -23,5 +23,7 @@ for (const [sourceName, outputName] of files) {
     sourceMap: false,
     sourceUrl: `agentproof://${sourceName}`,
   });
-  await writeFile(join(outputRoot, outputName), output, "utf8");
+  await Promise.all(
+    outputRoots.map((outputRoot) => writeFile(join(outputRoot, outputName), output, "utf8")),
+  );
 }

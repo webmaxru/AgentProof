@@ -9,7 +9,6 @@ export default tseslint.config(
       "packages/*/dist/**",
       "sample-repo/dist/**",
       "plugin/extensions/evidence-board/dist/**",
-      "plugin/extensions/evidence-board/*.js",
       "plugin/extensions/evidence-board/extension.mjs",
     ],
   },

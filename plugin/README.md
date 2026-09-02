@@ -71,8 +71,8 @@ The canvas adapter in `src/extension.ts` targets the Copilot SDK bundled with th
 - the host resolves `@github/copilot-sdk/extension`, so it is intentionally not an npm dependency;
 - the plugin manifest points at `extensions/`, whose immediate
   `evidence-board/` child contains the required `extension.mjs`;
-- the build emits the same reviewed runtime modules at the extension root for
-  discovery and under `dist/` for isolated tests;
+- the build emits a root discovery wrapper that imports the same reviewed
+  `dist/` runtime exercised by isolated tests;
 - action handlers return raw values and throw `CanvasError` for structured failures;
 - each canvas instance serves a tokenized URL from an ephemeral server bound only to `127.0.0.1`;
 - durable mutable board state is stored under the session workspace's ignored `.agentproof/evidence-board/` directory and keyed by repository plus PR, never by panel instance ID.

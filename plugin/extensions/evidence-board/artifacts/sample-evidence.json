@@ -1,0 +1,236 @@
+{
+  "schemaVersion": "1.0.0",
+  "documentType": "final",
+  "repository": "octo-org/agentproof-demo",
+  "pullRequestNumber": 42,
+  "baseSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "headSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "generatedAt": "2026-09-02T08:10:00.000Z",
+  "generatorVersion": "0.1.0",
+  "origin": {
+    "classification": "self-declared",
+    "declaredTool": "Claude Code",
+    "source": "pull-request-body"
+  },
+  "policy": {
+    "path": "policy/release-policy.yml",
+    "version": "1.0.0",
+    "baseSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  },
+  "tools": {
+    "nodeVersion": "22.23.0",
+    "npmVersion": "11.2.0",
+    "vitestVersion": "3.2.4",
+    "auditDatabaseUpdatedAt": "2026-09-02T07:45:00.000Z",
+    "agentproofVersion": "0.1.0"
+  },
+  "findings": [
+    {
+      "id": "AP-TEST-COVERAGE-001",
+      "category": "test",
+      "state": "pass",
+      "severity": "moderate",
+      "title": "Coverage threshold met",
+      "summary": "Vitest reported coverage above every protected threshold.",
+      "evidenceRefs": [
+        {
+          "kind": "coverage",
+          "name": "Vitest coverage summary",
+          "path": "artifacts/vitest-coverage.json",
+          "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+        }
+      ],
+      "exceptionable": false,
+      "remediationHint": "Keep positive coverage evidence bound to each new head SHA.",
+      "collector": "vitest",
+      "sourceSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "facts": {
+        "linesPct": 92,
+        "functionsPct": 90,
+        "branchesPct": 88,
+        "statementsPct": 92
+      }
+    },
+    {
+      "id": "AP-SEC-NPM-AUDIT-001",
+      "category": "security",
+      "state": "fail",
+      "severity": "high",
+      "title": "Production dependencies exceed severity policy",
+      "summary": "The normalized npm audit report ties a high-severity advisory to a runtime dependency.",
+      "evidenceRefs": [
+        {
+          "kind": "advisory",
+          "name": "Synthetic demonstration advisory",
+          "url": "https://github.com/advisories"
+        },
+        {
+          "kind": "workflow",
+          "name": "Normalized npm audit report",
+          "path": "artifacts/npm-audit.json"
+        }
+      ],
+      "exceptionable": false,
+      "remediationHint": "Upgrade, replace, or remove the vulnerable production dependency.",
+      "collector": "npm-audit",
+      "sourceSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "facts": {
+        "highestSeverity": "high",
+        "vulnerabilityCount": 1
+      }
+    },
+    {
+      "id": "AP-TEST-AUTHORIZATION-001",
+      "category": "test",
+      "state": "unknown",
+      "severity": "high",
+      "title": "Required authorization test not evidenced",
+      "summary": "The test report does not contain the stable authorization test identifier required by policy.",
+      "evidenceRefs": [
+        {
+          "kind": "test",
+          "name": "Vitest test report",
+          "path": "artifacts/vitest-results.json"
+        }
+      ],
+      "exceptionable": false,
+      "remediationHint": "Add the missing denial-path authorization test and rerun analysis.",
+      "collector": "vitest",
+      "sourceSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "facts": {
+        "requiredTestId": "expense-approval.authorization.non-approver-denied",
+        "matchCount": 0
+      }
+    },
+    {
+      "id": "AP-POL-RETENTION-001",
+      "category": "policy",
+      "state": "exception",
+      "severity": "moderate",
+      "title": "Data-retention declaration is incomplete",
+      "summary": "The declaration omits a deletion method. A prior exception is stale and the current one expired.",
+      "evidenceRefs": [
+        {
+          "kind": "policy",
+          "name": "Protected retention rule",
+          "path": "policy/release-policy.yml",
+          "line": 38
+        },
+        {
+          "kind": "file",
+          "name": "Synthetic data declaration",
+          "path": "sample-repo/config/data-handling.yml"
+        }
+      ],
+      "exceptionable": true,
+      "remediationHint": "Complete the declaration or submit a fresh bounded exception for the current SHA.",
+      "collector": "data-retention",
+      "sourceSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "facts": {
+        "missingFields": ["deletionMethod"],
+        "retentionDays": 30
+      }
+    }
+  ],
+  "diagnostics": [],
+  "dispositions": [
+    {
+      "findingId": "AP-POL-RETENTION-001",
+      "decision": "accept-exception",
+      "actor": "release-manager",
+      "actorPermission": "maintain",
+      "commentId": "1001",
+      "commentUrl": "https://github.com/octo-org/agentproof-demo/pull/42#issuecomment-1001",
+      "bodySha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "rationale": "Synthetic demo data is bounded while the declaration is corrected.",
+      "expires": "2026-10-31",
+      "recordedAt": "2026-09-01T10:00:00.000Z",
+      "boundHeadSha": "dddddddddddddddddddddddddddddddddddddddd",
+      "status": "stale",
+      "effective": false,
+      "errors": ["Disposition SHA does not match the evidence head SHA."]
+    },
+    {
+      "findingId": "AP-POL-RETENTION-001",
+      "decision": "accept-exception",
+      "actor": "release-manager",
+      "actorPermission": "maintain",
+      "commentId": "1002",
+      "commentUrl": "https://github.com/octo-org/agentproof-demo/pull/42#issuecomment-1002",
+      "bodySha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "rationale": "This bounded demonstration exception expired before evaluation.",
+      "expires": "2026-08-31",
+      "recordedAt": "2026-08-20T10:00:00.000Z",
+      "boundHeadSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "status": "expired",
+      "effective": false,
+      "errors": ["Exception has expired."]
+    },
+    {
+      "findingId": "AP-SEC-NPM-AUDIT-001",
+      "decision": "request-remediation",
+      "actor": "security-owner",
+      "actorPermission": "maintain",
+      "commentId": "1003",
+      "commentUrl": "https://github.com/octo-org/agentproof-demo/pull/42#issuecomment-1003",
+      "bodySha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "rationale": "Upgrade the vulnerable runtime dependency and regenerate evidence.",
+      "expires": null,
+      "recordedAt": "2026-09-02T08:05:00.000Z",
+      "boundHeadSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "status": "remediation-requested",
+      "effective": true,
+      "errors": []
+    }
+  ],
+  "reviewerNotes": [
+    {
+      "specialist": "test",
+      "sessionUrl": "https://github.com/octo-org/agentproof-demo/pull/42",
+      "sourceSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "summary": "Coverage passed, but the required authorization test identifier is absent.",
+      "findingIds": ["AP-TEST-COVERAGE-001", "AP-TEST-AUTHORIZATION-001"],
+      "createdAt": "2026-09-02T08:01:00.000Z",
+      "fragmentSha256": "4444444444444444444444444444444444444444444444444444444444444444"
+    },
+    {
+      "specialist": "security",
+      "sessionUrl": "https://github.com/octo-org/agentproof-demo/pull/42",
+      "sourceSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "summary": "The high-severity runtime advisory requires remediation.",
+      "findingIds": ["AP-SEC-NPM-AUDIT-001"],
+      "createdAt": "2026-09-02T08:02:00.000Z",
+      "fragmentSha256": "5555555555555555555555555555555555555555555555555555555555555555"
+    },
+    {
+      "specialist": "policy",
+      "sessionUrl": "https://github.com/octo-org/agentproof-demo/pull/42",
+      "sourceSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "summary": "The retention rule is exceptionable, but no current valid acceptance exists.",
+      "findingIds": ["AP-POL-RETENTION-001"],
+      "createdAt": "2026-09-02T08:03:00.000Z",
+      "fragmentSha256": "6666666666666666666666666666666666666666666666666666666666666666"
+    }
+  ],
+  "gate": {
+    "conclusion": "failure",
+    "unresolvedFindingIds": [
+      "AP-POL-RETENTION-001",
+      "AP-SEC-NPM-AUDIT-001",
+      "AP-TEST-AUTHORIZATION-001"
+    ],
+    "counts": {
+      "pass": 1,
+      "fail": 1,
+      "unknown": 1,
+      "exception": 1
+    },
+    "evaluatedAt": "2026-09-02T08:10:00.000Z",
+    "validUntil": null
+  },
+  "artifact": {
+    "sha256": "af6e7cb138f97ee28ca3045a113f241b4a07aca218ee6a04b122430c905bb840",
+    "workflowRunUrl": "https://github.com/octo-org/agentproof-demo/actions/runs/123456"
+  }
+}

@@ -1,0 +1,9 @@
+node_modules
+coverage
+.impeccable
+packages/*/dist
+sample-repo/dist
+plugin/extensions/evidence-board/dist
+package-lock.json
+demo/fallback
+packages/evidence-cli/tests/fixtures/retention/malformed.yml

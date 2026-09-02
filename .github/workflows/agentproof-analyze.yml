@@ -38,11 +38,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      METADATA_PATH: ${{ runner.temp }}/agentproof/metadata.json
-      RAW_EVIDENCE_PATH: ${{ runner.temp }}/agentproof/raw-evidence.json
+      METADATA_PATH: ${{ github.workspace }}/.agentproof-analysis/metadata.json
+      RAW_EVIDENCE_PATH: ${{ github.workspace }}/.agentproof-analysis/raw-evidence.json
     steps:
       - name: Check out trusted workflow bootstrap
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.base.sha || github.sha }}
           path: bootstrap
@@ -62,7 +62,7 @@ jobs:
         run: node bootstrap/.github/scripts/resolve-pr.mjs
 
       - name: Check out the protected base revision
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ steps.pr.outputs.base_sha }}
           path: trusted
@@ -74,7 +74,7 @@ jobs:
         run: test "$(git -C trusted rev-parse HEAD)" = "$EXPECTED_BASE_SHA"
 
       - name: Check out pull request subject
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ steps.pr.outputs.head_sha }}
           path: subject
@@ -86,7 +86,7 @@ jobs:
         run: test "$(git -C subject rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
 
       - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
 
@@ -104,7 +104,7 @@ jobs:
           --output "$RAW_EVIDENCE_PATH"
 
       - name: Upload raw evidence
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ steps.pr.outputs.artifact_name }}
           path: |

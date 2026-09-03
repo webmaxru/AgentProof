@@ -1,19 +1,18 @@
 # AgentProof
 
-AgentProof turns AI-assisted code from any model into a governed release
-decision. On each pull request, deterministic collectors produce test,
-dependency, and policy evidence bound to the exact head commit. Three
-least-privilege GitHub Copilot App sessions review the same evidence as test,
-security, and policy specialists. A mutable Evidence Board coordinates their
-results; GitHub commits, checks, comments, reviews, and retained artifacts
-remain authoritative.
+AgentProof is a model-neutral, SHA-bound release-evidence kit. PR-triggered
+GitHub Actions deterministically publish `AgentProof / gate`, an artifact, and a
+PR summary. The plugin adds three read-only specialists, an assembler, and a
+mutable Evidence Board; GitHub records remain authoritative.
 
-Unresolved failures, unknowns, and exceptions block `AgentProof / gate`.
-Eligible exceptions require an authorized, reasoned, expiring PR comment tied
-to the current SHA. Any remediation commit invalidates the prior decision, and
-repository rules still require independent human approval before merge.
+A private automation lab proved PR opened/synchronized dispatch and exposed the
+current permission gap. After the picker was reduced from 50 tools to 21
+read-only GitHub operations, the runtime still provided `functions.apply_patch`,
+`functions.bash`, and broader Actions access. AgentProof failed closed, made no
+automation mutation, and the trigger was disabled. Manual specialist sessions
+therefore remain the supported MVP.
 
-The reusable kit includes an installable plugin, policy and evidence contracts,
-automation prompts, setup and cleanup guides, templates, and a wholly synthetic
-expense-approval scenario. It provides evidence—not universal provenance,
-security assurance, or compliance certification.
+`pass`, `fail`, `unknown`, and `exception` stay distinct. Unresolved findings
+block, new SHAs invalidate prior evidence, and an independent human still
+approves. This is evidence, not provenance, security, or compliance
+certification.

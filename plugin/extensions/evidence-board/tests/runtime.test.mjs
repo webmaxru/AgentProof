@@ -3,7 +3,7 @@ import { register } from "node:module";
 import test from "node:test";
 
 register(new URL("./sdk-loader.mjs", import.meta.url));
-await import("../dist/extension.mjs?runtime-test");
+await import("../extension.mjs?runtime-test");
 
 const canvas = globalThis.__agentproofTestCanvas;
 

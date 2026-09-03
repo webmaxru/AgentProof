@@ -41,12 +41,12 @@ may further restrict them.
 
 Expected flow:
 
-| Workflow                 | Trigger                                       | Writes                                         |
-| ------------------------ | --------------------------------------------- | ---------------------------------------------- |
-| `AgentProof Analysis`    | PR opened/reopened/synchronized/ready; manual | Raw artifact only; repository/PR read          |
-| `AgentProof Publish`     | Successful analysis completion                | Required check, one PR summary, final artifact |
-| `AgentProof Disposition` | PR comment create/edit/delete                 | Dispatches reanalysis after authorization      |
-| `AgentProof Revalidate`  | Every six hours/manual                        | Dispatches analysis for current open PRs       |
+| Workflow                 | Trigger                                            | Writes                                           |
+| ------------------------ | -------------------------------------------------- | ------------------------------------------------ |
+| `AgentProof Analysis`    | PR opened/synchronized; trusted manual dispatch    | Raw artifact only; repository/PR read            |
+| `AgentProof Publish`     | Successful analysis completion                     | Required check, one PR summary, final artifact   |
+| `AgentProof Disposition` | PR comment create/edit/delete; PR metadata refresh | Invalidates and dispatches current-head analysis |
+| `AgentProof Revalidate`  | Every six hours/manual                             | Dispatches analysis for current open PRs         |
 
 ## 3. Seed the stable check
 

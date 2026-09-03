@@ -19,15 +19,16 @@ or production fitness.
 | Analysis workflow        | `agentproof-analyze.yml`                                  | Use protected workflow bootstrap, read-only GitHub access, no secrets, and an ephemeral runner to create raw head-SHA evidence.             |
 | Publisher                | `agentproof-publish.yml`                                  | Run trusted base code, validate provenance and live SHA, apply protected-base policy, publish the check/comment, and retain final evidence. |
 | Disposition/revalidation | `agentproof-disposition.yml`, `agentproof-revalidate.yml` | Re-evaluate on decision changes and periodically so deleted or expired acceptance cannot leave a stale green result.                        |
-| App reviewers            | Test, Security, Policy                                    | Read same-SHA facts and return advisory fragments; the bounded automation publisher may update one marker-delimited PR note.                |
-| Assembler and canvas     | Evidence Assembler, Evidence Board                        | Reject mixed-SHA inputs and provide a mutable operational view and decision draft.                                                          |
+| App reviewers            | Test, Security, Policy                                    | User starts three isolated, read-only sessions after the check; they return same-SHA advisory fragments and cannot write to GitHub.         |
+| Assembler and canvas     | Evidence Assembler, Evidence Board                        | User runs assembly manually to reject mixed-SHA inputs and load a mutable operational view and decision draft.                              |
+| Permission canary        | Disposable personal PR automation                         | Inspects the effective runtime tool boundary, stops before tool use on mutation capability, and is disabled after a failed validation.      |
 | Governance               | GitHub ruleset, CODEOWNERS, independent review            | Require the stable check and a separate human approval before merge.                                                                        |
 
 ## Data flow
 
 ```mermaid
 flowchart LR
-  PR[Untrusted PR head] -->|read-only, no secrets| A[Analysis workflow]
+  PR[Untrusted PR head] -->|PR event; read-only, no secrets| A[Analysis workflow]
   BP[Protected base policy and evaluator] --> A
   A -->|raw evidence + metadata| AR[Actions artifact]
   AR --> P[Trusted publisher]
@@ -36,8 +37,8 @@ flowchart LR
   P --> C[AgentProof / gate]
   P --> F[Final evidence artifact]
   C --> R[Repository ruleset]
-  F --> S[Three specialist sessions]
-  S --> E[Evidence Assembler]
+  F -->|user-confirmed manual launch| S[Three isolated read-only specialist sessions]
+  S --> E[Manual Evidence Assembler]
   E --> B[Evidence Board: mutable]
   H[Authorized PR disposition] --> D[Disposition workflow]
   D --> A
@@ -58,6 +59,18 @@ flowchart LR
 4. **Revalidate:** periodically dispatches fresh evidence for open PRs so
    expiry/deletion cannot preserve an obsolete decision indefinitely.
 
+Reviewer sessions are outside this write-capable workflow path. A user starts
+each installed agent or reviewed deep link only after the deterministic result
+exists, confirms a read-only tool set, and later invokes the assembler manually.
+If the App cannot safely reduce an **All tools** default, the launch is canceled.
+
+The private-lab permission canary tested the host rather than trusting profile
+frontmatter. The picker was reduced from 50 tools to 21 read/list/search/get
+operations, but the resulting automation still reported
+`functions.apply_patch`, `functions.bash`, and Actions access beyond the source
+repository. It returned `UNSAFE_TOOL_BOUNDARY` before tool use and was disabled.
+The canary is not connected to the deterministic gate.
+
 The workflows use concurrency controls so an obsolete analysis cannot
 intentionally overwrite a newer revision. GitHub Actions artifacts have finite
 retention and are evidence records, not permanent archives.
@@ -74,7 +87,17 @@ retention and are evidence records, not permanent archives.
 
 ## Deployment boundary
 
-The MVP is one private GitHub.com repository with synthetic data. Cloud
-automations are personal and single-repository scoped. Cross-repository
+The MVP is one private GitHub.com repository with synthetic data. GitHub Actions
+are PR-triggered; the three reviewer sessions and Evidence Assembler are manual.
+Checked-in automation prompts are blocked setup/product-feedback templates, not
+live personal reviewer automations or automation-as-code. Cross-repository
 portfolio orchestration, automatic merge/release, and a locked audit store are
 out of scope.
+
+On 2026-09-02, the private live repository successfully produced the SHA-bound
+check, artifact, and PR summary, and the plugin installed from
+`msft-common-demos/AgentProof:plugin`. On 2026-09-03, repository profiles on the
+private automation lab's default branch appeared after project selection and a
+disposable opened/synchronized automation ran. Effective runtime validation
+still exposed mutation-capable built-ins, so no reviewer automation was
+accepted and the candidate was disabled.

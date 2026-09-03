@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { stripTypeScriptTypes } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,3 +25,14 @@ for (const [sourceName, outputName] of files) {
   });
   await writeFile(join(outputRoot, outputName), output, "utf8");
 }
+
+await Promise.all(
+  files
+    .filter(([, outputName]) => outputName !== "extension.mjs")
+    .map(([, outputName]) => rm(join(packageRoot, outputName), { force: true })),
+);
+await writeFile(
+  join(packageRoot, "extension.mjs"),
+  'await import("./dist/extension.mjs");\n',
+  "utf8",
+);

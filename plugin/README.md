@@ -12,7 +12,11 @@ AgentProof packages four read-only reviewer profiles, two release-evidence skill
 - `exception-review`: strict, human-submitted disposition command runbook.
 - `evidence-board`: mutable coordination canvas with five schema-validated actions.
 
-All reviewer agents omit shell, edit, push, merge, approval, and GitHub mutation tools. The assembler additionally receives only the canvas discovery/open/action tools.
+The three specialist reviewer profiles omit shell, edit, push, merge, approval,
+and GitHub mutation tools and now stop with `UNSAFE_TOOL_BOUNDARY` if a host
+injects any of them at runtime. The assembler instead receives only the canvas
+discovery/open/action tools. Host-level tool injection must still be validated;
+profile declarations alone are not an effective-permission proof.
 
 ## Install
 
@@ -22,21 +26,18 @@ For a live development load from the repository root:
 copilot --plugin-dir ./plugin
 ```
 
-To exercise the repository marketplace:
+To install the published private repository marketplace:
 
 ```text
-copilot plugin marketplace add .
-copilot plugin marketplace browse agentproof-marketplace
+copilot plugin marketplace add msft-common-demos/AgentProof
 copilot plugin install agentproof@agentproof-marketplace
 ```
 
-After publishing the private repository, install the plugin subdirectory with:
-
-```text
-copilot plugin install OWNER/REPOSITORY:plugin
-```
-
-Repository installs are cached; run `copilot plugin update agentproof` or reinstall when validating unpublished changes. Directory-sourced marketplace and `--plugin-dir` loads are live and take effect in the next session.
+Marketplace installs are cached; run `copilot plugin marketplace update
+agentproof-marketplace` and `copilot plugin update agentproof` when validating a
+new published version. Direct repository installs currently work but are
+deprecated. Development `--plugin-dir` loads are live and take effect in the
+next session.
 
 ## Evidence Board actions
 
@@ -69,7 +70,10 @@ The canvas adapter in `src/extension.ts` targets the Copilot SDK bundled with th
 
 - extensions register with `joinSession({ canvases: [createCanvas(...)] })`;
 - the host resolves `@github/copilot-sdk/extension`, so it is intentionally not an npm dependency;
-- a plugin extension path names a directory containing `extension.mjs`, so the manifest points at `dist/`;
+- the plugin manifest points at `extensions/`, whose immediate
+  `evidence-board/` child contains the required `extension.mjs`;
+- the build emits a root discovery wrapper that imports the same reviewed
+  `dist/` runtime exercised by isolated tests;
 - action handlers return raw values and throw `CanvasError` for structured failures;
 - each canvas instance serves a tokenized URL from an ephemeral server bound only to `127.0.0.1`;
 - durable mutable board state is stored under the session workspace's ignored `.agentproof/evidence-board/` directory and keyed by repository plus PR, never by panel instance ID.

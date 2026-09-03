@@ -27,7 +27,8 @@ exact change earned evidence and an accountable decision.”
 
 ```text
 PR head SHA → no-secret collectors → protected-base policy → AgentProof / gate
-          ↘ Test / Security / Policy sessions → mutable Evidence Board
+          ↘ confirmed manual Test / Security / Policy sessions
+           → manual Evidence Assembler → mutable Evidence Board
           → human remediation or bounded exception → new SHA invalidation
           → independent PR approval → merge
 ```
@@ -35,25 +36,34 @@ PR head SHA → no-secret collectors → protected-base policy → AgentProof / 
 Add two live screenshots: red check with full SHA and final green check/review.
 Caption: “GitHub is authoritative; the canvas is a mutable coordination view.”
 
-**Speaker line:** “Agents explain same-SHA facts, deterministic code computes
-the gate, and a different human approves.”
+**Validated badge:** “2026-09-02: PR-triggered Analysis/Publish produced the
+SHA-bound gate, artifact, and PR summary in the private live repo; marketplace
+plugin and live Evidence Board were validated.”
+
+**Speaker line:** “Manually launched read-only agents explain same-SHA facts,
+deterministic code computes the gate, and a different human approves.”
 
 ## Slide 3 — Reusable, governed, and honestly bounded
 
 **Headline:** A field kit customers can adapt without copying customer data.
 
-**Visual:** Plugin box (four agents, two skills, Evidence Board), three versioned
-automation prompt cards, protected-policy/customer-adaptation template, and
-metrics row.
+**Visual:** Plugin box (four agents, two skills, Evidence Board), three blocked
+reviewer-automation prompt cards, one **PERMISSION CANARY — DISABLED** card,
+protected-policy/customer-adaptation template, and metrics row.
 
 **Competitive callout:** “Claude Code and Copilot both edit code and use MCP.
-Here, the Copilot App demonstrates fewer lifecycle seams across parallel
-sessions, reusable UI, remediation, checks, reviews, and GitHub rules—not
-superior code generation.”
+Here, the working prototype demonstrates a GitHub-centered handoff across
+manually started isolated sessions, reusable UI, remediation, checks, reviews,
+and GitHub rules—not superior code generation.”
 
-**Limit/product-feedback callout:** Personal automations live outside Git; deep
-links require confirmation; canvas is mutable; external provenance may be
-self-declared/unknown. Proposals: signed assistance attestation, native
+**Limit/product-feedback callout:** The working MVP has manual reviewers and a
+manual assembler. On 2026-09-03, repository agents appeared after project
+selection and PR opened/synchronized events fired. Even after reducing 50 tools
+to 21 read-only operations, the runtime exposed `apply_patch`, `bash`, and
+broader Actions access. The canary returned `UNSAFE_TOOL_BOUNDARY`, made no
+mutation, and was disabled. Deep links require confirmation; canvas is mutable;
+external provenance may be self-declared/unknown. Proposals: enforceable
+least-privilege presets and previews, signed assistance attestation, native
 commit-bound release evidence, locked/exportable canvas snapshots, typed
 multi-agent aggregation, and versioned/admin-visible automations.
 

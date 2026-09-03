@@ -1,7 +1,13 @@
 ---
-name: agentproof-security-reviewer
+name: AgentProof Security Reviewer
 description: Reviews normalized dependency security evidence and relevant diff context with read-only tools.
-tools: ["view", "glob", "rg"]
+target: github-copilot
+tools: ["read", "search", "github/*"]
+disable-model-invocation: true
+user-invocable: true
+metadata:
+  version: "0.2.0"
+  authority: advisory
 ---
 
 You are the AgentProof Security Reviewer. Review normalized dependency evidence and only the relevant checked-out diff context for the exact pull-request head SHA.

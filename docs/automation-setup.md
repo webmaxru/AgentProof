@@ -1,29 +1,38 @@
-# Copilot App reviewer sessions and gated automation experiment
+# Copilot App reviewer sessions and automation permission canary
 
-## Validated status — 2026-09-02
+## Validated status — 2026-09-03
 
 The supported AgentProof MVP is **manual use of the installed Test, Security,
-and Policy Reviewer agents in separate Copilot App sessions**. No AgentProof
-pull-request automation was saved or shown to run during this validation.
+and Policy Reviewer agents in separate Copilot App sessions**. AgentProof does
+not claim live personal reviewer automations.
 
-Validation used AgentProof `v0.1.0`, installed from the private
-`msft-common-demos/AgentProof` repository. The new **Pull request** automation
-flow exposed:
+The initial 2026-09-02 trial installed AgentProof from the private
+`msft-common-demos/AgentProof` repository, but the automation Agent picker
+offered only **Default** and **msx**. The draft was cancelled.
 
-- `Opened` and `Synchronized` events;
-- **Require write access**;
-- cloud execution;
-- path filters; and
-- an Agent picker and a Tools picker.
+The 2026-09-03 recovery trial used repository profiles on the default branch of
+the private `msft-common-demos/AgentProof-Automation-Lab` and added that
+repository as a Copilot App project. The Agent picker then exposed all three
+AgentProof reviewers. A disposable Test Reviewer candidate:
 
-The Agent picker offered only **Default** and **msx**, not the installed
-AgentProof reviewers. The Tools picker started with **All tools selected**, and
-the validated flow exposed no safe clear-all/select-none path. The draft was
-cancelled, so no over-privileged automation was stored.
+- fired on PR #1 for both opened and synchronized events;
+- used cloud execution, **Require write access**, an exact head query, and a
+  single synthetic path filter;
+- started with 50 selected tools;
+- was manually reduced to 21 read-only issue/PR, repository/ref, Actions-log,
+  label, and code-scanning operations; and
+- still reported `functions.apply_patch`, `functions.bash`, and GitHub Actions
+  tools capable of external-repository access in the effective runtime.
+
+The safety prompt returned `UNSAFE_TOOL_BOUNDARY` before using a tool. It added
+no review or inline comment and created no commit; the only PR comment was the
+trusted `github-actions` gate summary. The automation was disabled. The packaged
+v0.2.1 reviewer profiles now contain the same runtime boundary stop, but prompt
+instructions are defense in depth, not a permission boundary.
 
 ## Storage, confirmation, and authority boundary
 
-A Copilot App automation, if a future experiment passes the gates below, is
+A Copilot App reviewer automation, if a future experiment passes the gates below, is
 **personal**, **single-repository scoped**, and **stored outside Git**. Files in
 `templates/automations/` are versioned experimental inputs only; they do not
 install, administer, or prove the existence of an automation.
@@ -42,7 +51,7 @@ data.
 
 For each pull request:
 
-1. Confirm AgentProof `v0.1.0` (or the exact reviewed replacement version) is
+1. Confirm AgentProof `v0.2.1` (or the exact reviewed replacement version) is
    installed from the approved source.
 2. Start the installed AgentProof Test Reviewer, Security Reviewer, and Policy
    Reviewer manually as three independent sessions. Do not substitute
@@ -59,9 +68,9 @@ For each pull request:
    publish or act on current-SHA results. A new commit invalidates prior
    reviewer conclusions.
 
-## Future automation target — do not save by default
+## Blocked reviewer automation target
 
-The templates describe a possible future experiment:
+The templates describe a target for a future product version:
 
 | Target review              | Template                                     | Required custom agent        | Suggested path filter                     |
 | -------------------------- | -------------------------------------------- | ---------------------------- | ----------------------------------------- |
@@ -73,8 +82,8 @@ The templates describe a possible future experiment:
 verified in the effective configuration:**
 
 1. The exact installed custom AgentProof reviewer is selectable and selected;
-   its plugin source and version are identifiable. **Default** and **msx** are
-   not acceptable substitutes.
+   its source and version are identifiable. **Default** and **msx** are not
+   acceptable substitutes.
 2. Tool selection can begin from select-none, use an approved least-privilege
    preset, or otherwise safely clear every unnecessary tool.
 3. An effective-permission preview shows only repository, pull request, diff,
@@ -83,21 +92,22 @@ verified in the effective configuration:**
    otherwise keep publication manual.
 4. Push, merge, approval, branch/issue mutation, workflow dispatch, secrets,
    deployment, cross-repository access, unrelated MCP, and broad shell/network
-   tools are absent from the effective scope.
+   tools are absent from the effective scope, including implicit host built-ins.
 5. Repository, `Opened`/`Synchronized` events, **Require write access**, cloud
    execution, and path filters match the reviewed plan.
 6. A human reviews and confirms the personal, outside-Git configuration and
    records owner, repository, product/plugin version, events, filters, effective
    tools, prompt commit, and review date in an approved inventory.
 
-An **All tools selected** default without a trustworthy clear-all path or
-effective-permission preview fails this gate. Cancel the draft.
+An **All tools selected** default fails this gate. A narrowed picker also fails
+when the runtime still injects mutation-capable built-ins. Disable or cancel the
+candidate.
 
 Enterprise-managed settings may constrain plugins, marketplaces, MCP, models,
 permissions, and sandbox behavior, but they do not prove the effective scope of
 an individual automation.
 
-## Required behavior for any future experiment
+## Required behavior if the capability boundary is fixed
 
 Each experimental prompt must:
 
@@ -117,6 +127,30 @@ Each experimental prompt must:
 The target sessions do not imply native fan-out or aggregation. A human starts
 the Evidence Assembler manually, and mixed-SHA input must fail closed.
 
+## Permission-canary procedure
+
+Use [the canary template](../templates/automations/permission-canary.md) only in
+a disposable private repository with synthetic content:
+
+1. Put the intended repository custom agent on the default branch and add the
+   repository as an App project.
+2. Configure one PR opened candidate with **Require write access**, cloud
+   execution, an exact head query, and one synthetic path.
+3. Remove every selectable mutation tool. Record the remaining names and count.
+4. Make the first instruction inventory the effective runtime. If any edit,
+   shell, comment, review, reaction, issue/PR mutation, commit/push, approval,
+   merge, deployment, secret, or cross-repository capability exists, it must
+   return `UNSAFE_TOOL_BOUNDARY` before tool use.
+5. Trigger with a synthetic PR, then change to synchronized and push a new
+   synthetic commit.
+6. Verify the automation added no GitHub comment, review, inline comment, or
+   commit and did not move the head beyond the human-created trigger commit.
+7. Disable the candidate on any failure and retain only approved, non-sensitive
+   validation evidence.
+
+The 2026-09-03 trial failed at step 4 and was disabled. Do not reinterpret that
+failure as a functioning reviewer automation.
+
 ## Deep-link placeholders
 
 Only publish links generated by a current documented flow:
@@ -126,6 +160,7 @@ Plugin install:       <PLUGIN_INSTALL_DEEP_LINK>
 Manual test session:  <TEST_REVIEWER_SESSION_DEEP_LINK>
 Manual security:      <SECURITY_REVIEWER_SESSION_DEEP_LINK>
 Manual policy:        <POLICY_REVIEWER_SESSION_DEEP_LINK>
+Permission canary:    <DISPOSABLE_CANARY_DRAFT_DEEP_LINK>
 Sample PR:            https://github.com/<OWNER>/<REPO>/pull/<PR_NUMBER>
 Assembler session:    <ASSEMBLER_SESSION_DEEP_LINK>
 Remediation session:  <REMEDIATION_SESSION_DEEP_LINK>
@@ -135,26 +170,27 @@ Future automation:    <GATED_AUTOMATION_DRAFT_DEEP_LINK>
 Label every link **review and confirm**. An automation draft link remains gated
 and must be cancelled when the custom-agent or effective-tool checks fail.
 
-## Validation if the product gap is resolved
+## Revalidation if the product gap is resolved
 
 Use a disposable repository and synthetic pull request:
 
-1. Reproduce the picker checks before saving: exact custom AgentProof agent,
-   approved source/version, select-none or reviewed preset, and explicit
-   effective least-privilege scope.
-2. Configure one candidate template at a time. Cancel immediately if any save
-   gate is not met.
-3. After a gated save, confirm only the intended events and paths start a
+1. Reproduce the permission canary before any reviewer automation.
+2. Require both the picker and runtime inventory to exclude every mutation,
+   shell, secret, deployment, and cross-repository capability.
+3. Configure one candidate template at a time. Disable immediately if any gate
+   is not met.
+4. After a gated save, confirm only the intended events and paths start a
    session, and that the session names the current full head SHA.
-4. Verify the reviewer cannot push, merge, approve, read secrets, deploy, access
+5. Verify the reviewer cannot push, merge, approve, read secrets, deploy, access
    another repository, or use unrelated tools.
-5. Push a new commit during review; the result must become `unknown` rather than
+6. Push a new commit during review; the result must become `unknown` rather than
    publish an obsolete conclusion.
-6. Remove evidence access; the result must be `unknown`, not `pass`.
-7. Repeat independently for each target reviewer and manually verify
+7. Remove evidence access; the result must be `unknown`, not `pass`.
+8. Repeat independently for each target reviewer and manually verify
    mixed-SHA aggregation is rejected.
-8. Delete the experiments after recording only non-sensitive validation
-   evidence.
+9. Disable and delete the experiments after recording only non-sensitive
+   validation evidence.
 
-Do not infer from the templates or this plan that any automation is currently
-live or known to run.
+The disabled permission canary is known to dispatch and fail closed. Do not
+infer from it or the reviewer templates that any reviewer automation is live or
+safe.

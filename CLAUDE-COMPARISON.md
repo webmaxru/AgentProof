@@ -13,10 +13,13 @@ agents or confirmed deep links and manually runs the Evidence Assembler. Their
 advice and mutable canvas stay in one GitHub-centered workspace, while native
 GitHub records remain authoritative and a different human still approves.
 
-AgentProof does not claim three live personal reviewer automations. On
-2026-09-02, the App automation picker did not expose the installed reviewers and
-defaulted to All tools, so setup was canceled; the prompt templates are future
-setup/product feedback. The Claude-assisted PR is `self-declared` unless
-verified platform attribution exists and is governed like Copilot-assisted,
-local-model, or human-written code. This is not a universal provenance,
-compliance, security, or code-quality claim.
+AgentProof does not claim three live personal reviewer automations. A
+2026-09-03 private-lab candidate proved that project selection exposes the
+repository reviewers and that opened/synchronized triggers run. It also proved
+why the reviewers remain manual: after reducing the picker from 50 tools to 21
+read-only GitHub operations, the runtime still exposed `functions.apply_patch`,
+`functions.bash`, and broader Actions access. The permission canary stopped,
+made no mutation, and was disabled. The Claude-assisted PR is `self-declared`
+unless verified platform attribution exists and is governed like
+Copilot-assisted, local-model, or human-written code. This is not a universal
+provenance, compliance, security, or code-quality claim.

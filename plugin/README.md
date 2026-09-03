@@ -12,7 +12,11 @@ AgentProof packages four read-only reviewer profiles, two release-evidence skill
 - `exception-review`: strict, human-submitted disposition command runbook.
 - `evidence-board`: mutable coordination canvas with five schema-validated actions.
 
-All reviewer agents omit shell, edit, push, merge, approval, and GitHub mutation tools. The assembler additionally receives only the canvas discovery/open/action tools.
+The three specialist reviewer profiles omit shell, edit, push, merge, approval,
+and GitHub mutation tools and now stop with `UNSAFE_TOOL_BOUNDARY` if a host
+injects any of them at runtime. The assembler instead receives only the canvas
+discovery/open/action tools. Host-level tool injection must still be validated;
+profile declarations alone are not an effective-permission proof.
 
 ## Install
 

@@ -5,11 +5,13 @@ schema, or compliance baseline. Names and availability vary by GitHub plan and
 the current Copilot App. An enterprise administrator must translate the intent
 into approved live settings.
 
-As validated on 2026-09-02, the AgentProof MVP uses manually started installed
-reviewer sessions. No AgentProof pull-request automation was saved or proven to
-run: the automation Agent picker omitted the installed AgentProof agents, while
-the Tools picker defaulted to **All tools selected** and exposed no safe
-clear-all path.
+As validated through 2026-09-03, the AgentProof MVP uses manually started
+installed reviewer sessions. A disposable private-lab automation proved that
+repository reviewers appear after project selection and that PR
+opened/synchronized events dispatch. It also failed the permission gate: after
+the picker was reduced from 50 tools to 21 read-only operations, the runtime
+still exposed `functions.apply_patch`, `functions.bash`, and broader Actions
+access. The candidate was disabled.
 
 ## Layer 1: centrally managed App guardrails
 
@@ -43,16 +45,16 @@ For each AgentProof Test, Security, or Policy Reviewer session:
 A human controls publication, Evidence Assembler invocation, remediation,
 exception decisions, approval, merge, and release.
 
-## Layer 3: future personal automation experiment
+## Layer 3: blocked personal automation experiment
 
 Central settings do not automatically prove least privilege for an automation.
 Automations are personal and stored outside Git. The committed templates do not
 create them.
 
-**Do not save a draft** unless the exact installed AgentProof custom agent,
-plugin source/version, and explicit effective least-privilege tool scope are all
-visible and verified. An all-tools default without a safe select-none/reset and
-effective-permission preview fails this gate.
+**Do not enable a reviewer automation** unless the exact AgentProof custom
+agent, source/version, and explicit effective least-privilege tool scope are all
+visible and verified in both the picker and runtime. An all-tools default or
+implicit host `apply_patch`/shell capability fails this gate.
 
 If a future product version passes the gate, record this candidate
 configuration separately for each reviewer:
@@ -77,6 +79,7 @@ allowed_reads:
 allowed_writes:
   - <NONE_OR_VERIFIED_SEPARATE_BOUNDED_COMMENT_UPDATE>
 denied:
+  - implicit host edit, apply-patch, or shell tools
   - push or branch mutation
   - merge or approval
   - issue mutation
@@ -115,11 +118,10 @@ independence.
 2. Install the exact reviewed plugin version through a confirmed flow.
 3. Exercise the three installed reviewers as manual, read-only sessions against
    synthetic pull requests and current full head SHAs.
-4. For a future automation experiment, first verify custom-agent selection,
-   select-none or an approved preset, and an effective-permission preview.
-   Cancel without saving if any check fails.
-5. After a gated save only, prove the experiment cannot push, merge, approve,
-   read secrets, deploy, or access another repository; then remove it when the
+4. Run the disposable permission canary before any reviewer automation. Verify
+   custom-agent selection, picker scope, and the actual runtime inventory.
+5. Disable the experiment if it exposes edit, shell, push, merge, approval,
+   secret, deployment, or cross-repository capability; then remove it when the
    trial ends.
 6. Prove the ruleset blocks red-gate and missing-review cases independently.
 7. Review data classification, retention, incident response, accessibility,

@@ -1,7 +1,7 @@
 {
   "name": "agentproof",
   "description": "Commit-bound release evidence review and a human-decision Evidence Board for GitHub Copilot.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "author": {
     "name": "AgentProof contributors"
   },

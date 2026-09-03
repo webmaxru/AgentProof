@@ -37,8 +37,8 @@ Add two live screenshots: red check with full SHA and final green check/review.
 Caption: “GitHub is authoritative; the canvas is a mutable coordination view.”
 
 **Validated badge:** “2026-09-02: PR-triggered Analysis/Publish produced the
-SHA-bound gate, artifact, and PR summary in the private live repo; plugin
-installed from `msft-common-demos/AgentProof:plugin`.”
+SHA-bound gate, artifact, and PR summary in the private live repo; marketplace
+plugin and live Evidence Board were validated.”
 
 **Speaker line:** “Manually launched read-only agents explain same-SHA facts,
 deterministic code computes the gate, and a different human approves.”
@@ -47,8 +47,8 @@ deterministic code computes the gate, and a different human approves.”
 
 **Headline:** A field kit customers can adapt without copying customer data.
 
-**Visual:** Plugin box (four agents, two skills, Evidence Board), three versioned
-prompt cards labeled **FUTURE AUTOMATION SETUP / PRODUCT FEEDBACK**,
+**Visual:** Plugin box (four agents, two skills, Evidence Board), three blocked
+reviewer-automation prompt cards, one **PERMISSION CANARY — DISABLED** card,
 protected-policy/customer-adaptation template, and metrics row.
 
 **Competitive callout:** “Claude Code and Copilot both edit code and use MCP.
@@ -57,14 +57,15 @@ manually started isolated sessions, reusable UI, remediation, checks, reviews,
 and GitHub rules—not superior code generation.”
 
 **Limit/product-feedback callout:** The working MVP has manual reviewers and a
-manual assembler. On 2026-09-02, installed AgentProof agents were absent from
-the New PR automation picker, which showed only Default and msx; tools defaulted
-to All tools with no safe clear-all path, so setup was canceled. Deep links
-require confirmation; canvas is mutable; external provenance may be
-self-declared/unknown. Proposals: safe least-privilege presets, signed assistance
-attestation, native commit-bound release evidence, locked/exportable canvas
-snapshots, typed multi-agent aggregation, and versioned/admin-visible
-automations.
+manual assembler. On 2026-09-03, repository agents appeared after project
+selection and PR opened/synchronized events fired. Even after reducing 50 tools
+to 21 read-only operations, the runtime exposed `apply_patch`, `bash`, and
+broader Actions access. The canary returned `UNSAFE_TOOL_BOUNDARY`, made no
+mutation, and was disabled. Deep links require confirmation; canvas is mutable;
+external provenance may be self-declared/unknown. Proposals: enforceable
+least-privilege presets and previews, signed assistance attestation, native
+commit-bound release evidence, locked/exportable canvas snapshots, typed
+multi-agent aggregation, and versioned/admin-visible automations.
 
 **Speaker line:** “The green result is bounded to this repository, policy, and
 SHA; it is evidence, not universal compliance or provenance.”

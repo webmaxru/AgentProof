@@ -7,7 +7,7 @@ tools:
 disable-model-invocation: true
 user-invocable: true
 metadata:
-  version: "0.2.0"
+  version: "0.2.1"
   authority: coordination
 ---
 

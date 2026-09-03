@@ -1,23 +1,26 @@
 # Cleanup
 
 Cleanup must cover the App and GitHub; deleting local files does not remove App
-sessions, a future personal automation, or remote evidence.
+sessions, a personal automation experiment, or remote evidence.
 
-The 2026-09-02 validation draft was cancelled, and no AgentProof automation was
-saved. Do not report three live automations or invent automation cleanup work.
+The 2026-09-03 private-lab permission canary was saved, triggered three times,
+and disabled after runtime validation exposed mutation-capable built-ins. It is
+not a reviewer automation. Do not report three live reviewer automations.
 
 ## Copilot App
 
 1. Inspect the current user's automation inventory for `<OWNER>/<REPO>`.
-2. If a later gated experiment was actually saved, disable and delete that
-   specific personal automation, then record only non-sensitive confirmation.
-   Do not assume Test, Security, or Policy automations exist.
-3. Confirm no personal automation remains for the repository.
+2. Keep the failed canary disabled while its non-sensitive validation record is
+   needed, then delete that specific personal automation under the approved
+   retention process. Do not assume Test, Security, or Policy reviewer
+   automations exist.
+3. Confirm no enabled personal automation remains for either the primary
+   repository or the private automation lab.
 4. Close disposable manual reviewer, assembler, and remediation sessions
    according to the organization's retention policy.
 5. Clear Evidence Board state. Remember that clearing a mutable canvas does not
    delete GitHub records.
-6. Uninstall AgentProof `v0.1.0` or its replacement if it is no longer approved
+6. Uninstall AgentProof `v0.2.1` or its replacement if it is no longer approved
    or needed.
 7. Remove obsolete deep-link bookmarks. Remove an automation inventory entry
    only if an automation had actually been saved.
@@ -54,8 +57,8 @@ delete shared Node/npm caches as part of this project cleanup.
 
 ## Verify
 
-- No personal automation targets the retired repository; the cancelled
-  2026-09-02 draft is not listed as one.
+- No enabled personal automation targets the retired repositories; the disabled
+  2026-09-03 canary is retained or deleted according to the approved record.
 - No plugin development install remains.
 - No open PR, branch, ruleset bypass, environment, or temporary collaborator
   remains unintentionally.

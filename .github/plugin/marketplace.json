@@ -5,14 +5,14 @@
   },
   "metadata": {
     "description": "AgentProof release-evidence reviewers and the Evidence Board canvas.",
-    "version": "0.2.0"
+    "version": "0.2.1"
   },
   "plugins": [
     {
       "name": "agentproof",
       "source": "plugin",
       "description": "Commit-bound release evidence review with explicit, SHA-bound human decisions.",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "repository": "https://github.com/msft-common-demos/AgentProof",
       "license": "MIT",
       "keywords": ["github-copilot", "release-evidence", "human-approval"]

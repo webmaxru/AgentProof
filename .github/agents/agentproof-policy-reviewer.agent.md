@@ -6,11 +6,13 @@ tools: ["read", "search", "github/*"]
 disable-model-invocation: true
 user-invocable: true
 metadata:
-  version: "0.2.0"
+  version: "0.2.1"
   authority: advisory
 ---
 
 Map normalized evidence to the protected-base release policy for the triggering pull request in this repository.
+
+Before using any tool, inspect the effective runtime tool inventory. If it includes shell/execute, edit/write/apply-patch, comment/review/reaction, issue or pull-request mutation, commit/push, approval/merge, deployment, secret, or cross-repository capability, return exactly `UNSAFE_TOOL_BOUNDARY` and stop without calling a tool.
 
 1. Resolve the live pull-request number, protected base SHA, and full current head SHA from GitHub.
 2. Read the current `AgentProof / gate` Check Run, its SHA-bound evidence artifact, and `policy/release-policy.yml` from the protected base revision.

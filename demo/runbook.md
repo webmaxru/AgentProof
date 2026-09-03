@@ -32,11 +32,14 @@ succeeded in the private live repository and produced the full-SHA-bound
 `AgentProof / gate`, artifact, and PR summary. The plugin installed from
 `msft-common-demos/AgentProof:plugin`.
 
-The Copilot App **New PR automation** picker did not expose the installed
-AgentProof reviewers (only Default and msx appeared). Tools defaulted to **All
-tools**, and no safe clear-all path was found. The dialog was canceled without
-saving. Do not narrate three personal automations; the working sequence uses
-three isolated, manually started, read-only sessions.
+On 2026-09-03, the private automation lab exposed all three repository reviewer
+profiles after project selection, and a disposable candidate fired on PR opened
+and synchronized. After the picker was reduced from 50 tools to 21 read-only
+operations, the runtime still reported `functions.apply_patch`,
+`functions.bash`, and broader Actions access. It returned
+`UNSAFE_TOOL_BOUNDARY`, made no automation mutation, and was disabled. Do not
+narrate three personal reviewer automations; the working sequence uses three
+isolated, manually started, read-only sessions.
 
 ## T-24 hours
 
@@ -53,10 +56,10 @@ three isolated, manually started, read-only sessions.
 5. Exercise unauthorized, stale-SHA, edit/delete, expiry, red-with-approval, and
    green-without-approval acceptance tests.
 6. Confirm action pins, workflow permissions, manual reviewer read scopes, and
-   ruleset. If a launch cannot be limited from **All tools**, cancel it. Confirm
-   no secret/customer data exists.
-7. Confirm automation prompts are labeled future setup/product feedback and no
-   live reviewer automation is claimed.
+   ruleset. Confirm no secret/customer data exists.
+7. Confirm the permission-canary automation is disabled, its result remains
+   non-sensitive, reviewer templates are labeled blocked, and no live reviewer
+   automation is claimed.
 8. Cold-review the 2:54 storyboard with one technical and one non-technical
    viewer.
 
@@ -80,7 +83,8 @@ three isolated, manually started, read-only sessions.
    - remediation session with the real diff ready to push;
    - Actions/PR view ready to show stale and then fresh evidence;
    - independent-review profile;
-   - README/templates and three-slide outline.
+   - disabled permission-canary result, README/templates, and three-slide
+     outline.
 7. Copy the exact unsafe and expected remediated SHAs into presenter-only notes.
 8. Pre-type only the allowed exception skeleton; verify finding ID, full live
    SHA, rationale, and expiry immediately before submission.
@@ -113,7 +117,8 @@ Follow `demo/storyboard.md` without adding time:
 8. **2:12:** show green gate and match final evidence SHA/digest.
 9. **2:32:** approve from the distinct reviewer profile; show merge available,
    but do not merge.
-10. **2:43:** show the kit and four explicit boundaries; stop by **2:54**.
+10. **2:43:** show the disabled canary's `apply_patch`, `bash`, and
+    `UNSAFE_TOOL_BOUNDARY` result, then the kit boundaries; stop by **2:54**.
 
 ## Go/no-go checks while recording
 
@@ -121,13 +126,15 @@ Follow `demo/storyboard.md` without adding time:
 - Stop if any specialist fragment is for another SHA.
 - Stop if a reviewer was started before the deterministic check completed or
   has more than the required read tools.
+- Stop if the permission canary is enabled or if its failed result is described
+  as a functioning reviewer automation.
 - Stop if an account, notification, secret, customer/tenant identifier, or
   unrelated content appears.
 - Stop if ruleset or check behavior differs from the narration.
 - Do not call a network/tool failure a pass.
 - Do not say “compliant,” “secure,” “verified author,” “immutable canvas,”
-  “automation-as-code,” “three live reviewer automations,” or “automatic
-  approval.”
+  “automation-as-code,” “three live reviewer automations,” “safe automation
+  runtime,” or “automatic approval.”
 
 ## Continuity fallback
 

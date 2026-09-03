@@ -72,25 +72,27 @@ split:
 A human controls publication and starts the Evidence Assembler. Preserve
 `pass`, `fail`, `unknown`, and `exception` as distinct evidence states.
 
-The files in `templates/automations/` are future experimental inputs, not live
-configuration. **Do not save an automation** unless:
+The files in `templates/automations/` are gated experimental inputs, not live
+reviewer configuration. **Do not enable a reviewer automation** unless:
 
 1. the exact installed AgentProof custom reviewer is available in the Agent
    picker, with its approved source and version visible;
 2. tools can start from select-none or an approved preset;
-3. an effective-permission preview proves the exact least-privilege read scope
-   and any separate bounded publication behavior; and
+3. both the picker and a disposable runtime canary prove the exact
+   least-privilege read scope and any separate bounded publication behavior; and
 4. push, merge, approval, exception, secrets, deployment, cross-repository,
-   unrelated MCP, and broad shell/network capabilities are absent.
+   unrelated MCP, implicit edit/apply-patch, and broad shell/network capabilities
+   are absent.
 
-On 2026-09-02, AgentProof `v0.1.0` did not pass this gate: the Pull request
-automation Agent picker showed only **Default** and **msx**, and Tools defaulted
-to **All tools selected** without a safe clear-all path. The draft was
-cancelled.
+On 2026-09-03, repository reviewers became selectable after adding the private
+lab as an App project, and opened/synchronized events ran. The gate still failed:
+after reducing 50 picker tools to 21 read-only operations, the runtime exposed
+`functions.apply_patch`, `functions.bash`, and broader Actions access. The
+candidate made no automation mutation and was disabled.
 
 If a future product version passes the gate, the automation remains personal
-and stored outside Git. Enterprise-managed settings and effective
-per-automation tool scope are separate. Require human review/confirmation,
+and stored outside Git. Enterprise-managed settings, picker selections, and
+effective runtime tools are separate. Require human review/confirmation,
 version/admin visibility, ownership transfer, inventory, and periodic
 revalidation.
 

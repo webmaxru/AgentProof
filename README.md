@@ -11,6 +11,15 @@ starts three isolated, read-only Copilot App sessions to explain the evidence,
 then runs the Evidence Assembler manually. A release manager decides whether to
 remediate or accept an eligible, bounded exception.
 
+The private automation lab also proved a fail-closed permission canary on
+2026-09-03. Repository reviewer profiles appeared after project selection, and
+PR opened/synchronized events ran. However, even after the automation picker was
+reduced from 50 tools to 21 read-only GitHub operations, the runtime still
+reported `functions.apply_patch`, `functions.bash`, and GitHub Actions tools that
+could access external repositories. The canary performed no mutation and the
+automation was disabled. Personal reviewer automations are therefore not part of
+the supported MVP.
+
 AgentProof produces evidence, not a legal, privacy, security, or regulatory
 certification. The demo contains no customer data.
 
@@ -56,6 +65,10 @@ protected-base evaluator + policy --> AgentProof / gate
 
 Authoritative record: GitHub commit, check, PR comments/reviews, and evidence artifact
 ```
+
+The disposable automation permission canary is validation evidence, not an
+enforcement component. Its latest result failed closed and the trigger is
+disabled.
 
 The write-capable publisher runs trusted default/base-branch code and does not
 execute PR-controlled code. See [architecture](docs/architecture.md),
@@ -141,10 +154,12 @@ copilot plugin marketplace add msft-common-demos/AgentProof
 copilot plugin install agentproof@agentproof-marketplace
 ```
 
-This installed AgentProof v0.1.0 and its two skills. Plugin installation and
-every deep-link launch still require the user's authorized confirmation. A
-direct repository install from `msft-common-demos/AgentProof:plugin` also worked,
-but that flow is deprecated and is not setup guidance.
+The marketplace flow was live-validated through AgentProof v0.2.0. The packaged
+v0.2.1 reviewer profiles add an explicit runtime tool-boundary stop. Plugin
+installation and every deep-link launch still require the user's authorized
+confirmation. A direct repository install from
+`msft-common-demos/AgentProof:plugin` also worked, but that flow is deprecated
+and is not setup guidance.
 
 After `AgentProof Analysis` and `AgentProof Publish` produce the check, artifact,
 and PR summary for the current head SHA:
@@ -159,29 +174,38 @@ and PR summary for the current head SHA:
 4. Manually run the Evidence Assembler after all three reviewers finish; reject
    mixed-SHA inputs before loading the mutable Evidence Board.
 
-The checked-in reviewer prompts are product-feedback and future-setup templates,
-not active automations:
+The checked-in reviewer prompts are gated setup inputs, not active reviewer
+automations:
 
 - [Test Reviewer prompt](templates/automations/test-reviewer.md)
 - [Security Reviewer prompt](templates/automations/security-reviewer.md)
 - [Policy Reviewer prompt](templates/automations/policy-reviewer.md)
+- [Automation Permission Canary](templates/automations/permission-canary.md)
 
 On 2026-09-02, the private live repository
 `msft-common-demos/AgentProof` successfully ran the PR-triggered deterministic
 Analysis/Publish path and produced the SHA-bound `AgentProof / gate`, artifact,
-and PR summary. The marketplace flow above installed AgentProof v0.1.0 and its
-two skills; that success does not establish reviewer-agent availability in the
-automation picker. In the Copilot App **New PR automation** dialog, the installed
-AgentProof reviewers did not appear in the agent picker (only Default and msx
-appeared), and tool scope defaulted to **All tools** with no safe clear-all path
-found. The dialog was canceled without saving. AgentProof therefore does not
-claim three live personal reviewer automations.
+and PR summary. The marketplace flow installed AgentProof v0.2.0 and its two
+skills.
+
+On 2026-09-03, a separate private
+[`AgentProof-Automation-Lab`](https://github.com/msft-common-demos/AgentProof-Automation-Lab)
+project exposed the repository Test, Security, and Policy reviewers in the
+automation picker. A disposable PR #1 candidate fired for both opened and
+synchronized events. The picker was manually narrowed from 50 tools to these 21
+read-only operations: issue/PR reads and searches, repository file/code/ref
+reads, Actions workflow/log reads, label reads, and code-scanning-alert reads.
+The resulting session still reported `functions.apply_patch`, `functions.bash`,
+and GitHub Actions tools with external-repository capability. It returned
+`UNSAFE_TOOL_BOUNDARY`, made no PR review or inline comment, created no commit,
+and was disabled. AgentProof therefore does not claim live personal reviewer
+automations.
 
 Treat [automation setup](docs/automation-setup.md) and
-[enterprise settings](docs/enterprise-settings-example.md) as future setup and
-product-feedback references only. App deep links may prefill a supported flow,
-but they never silently install a plugin, create an automation, or start a
-session.
+[enterprise settings](docs/enterprise-settings-example.md) as validated
+permission-gate and product-feedback references. App deep links may prefill a
+supported flow, but they never silently install a plugin, create an automation,
+or start a session.
 
 ## End-to-end workflow
 
@@ -319,8 +343,11 @@ Measure a baseline and a trial; do not report targets as achieved results.
 - The working MVP has no live personal reviewer automations. Its three reviewer
   sessions and Evidence Assembler are manually started after deterministic
   checks complete.
-- Automation prompt templates are future setup/product-feedback inputs, not
-  automation-as-code or proof that an automation exists.
+- A disabled private-lab permission canary proves PR automation dispatch and the
+  current unsafe effective tool boundary; it is not a reviewer result or
+  automation-as-code.
+- Automation prompt templates remain blocked setup/product-feedback inputs until
+  host-injected mutation tools can be removed and verified.
 - Deep links and installed-agent launches require user review and confirmation.
 - External tool/model origin may be self-declared or unknown.
 - npm advisory availability, runner/network health, and report quality may
@@ -341,10 +368,13 @@ Measure a baseline and a trial; do not report targets as achieved results.
   evidence and comment; rerun and re-record the decision for the new SHA.
 - **Collector is `unknown`:** inspect the workflow log and machine-readable
   report; do not convert tool/network failure into pass.
-- **Reviewer is absent from the PR automation picker:** this is the validated
-  MVP limitation, not evidence that an automation exists. Start a manual
-  installed-agent session or confirmed deep link instead. If a safe read-only
-  tool set cannot be selected, cancel.
+- **Reviewer is absent from the PR automation picker:** select the repository
+  project first and confirm the profile exists on its default branch. If it
+  remains absent, start a manual installed-agent session or confirmed deep link.
+- **Automation still exposes built-in mutation tools:** disable it immediately.
+  The 2026-09-03 canary still saw `functions.apply_patch` and `functions.bash`
+  after every selectable mutation tool was removed. Prompt instructions are not
+  a permission boundary.
 - **Manual reviewer has the wrong SHA:** discard its output and start a fresh
   session only after the current deterministic check completes.
 - **Plugin/canvas appears cached:** remove the development install, reinstall
@@ -359,8 +389,8 @@ Measure a baseline and a trial; do not report targets as achieved results.
 - Exact competition sequence: [storyboard](demo/storyboard.md) and
   [runbook](demo/runbook.md)
 - Clearly labeled continuity assets: [fallback guidance](demo/fallback/README.md)
-- Remove the manual sessions, plugin, ruleset, branches, artifacts, any future
-  automation experiments, and synthetic repository by following
+- Remove the manual sessions, plugin, ruleset, branches, artifacts, disabled
+  permission canary, and synthetic repositories by following
   [cleanup](docs/cleanup.md).
 
 ## Provenance and license

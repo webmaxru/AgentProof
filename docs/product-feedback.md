@@ -4,39 +4,49 @@ These proposals record workflow friction, not promises of available product
 features. Reproduce against the current Copilot App before submission because
 the product changes quickly.
 
-## 1. Installed plugin agents and safe automation permissions
+## 1. Custom agents and effective automation permissions
 
-- **Validation context:** on 2026-09-02, AgentProof `v0.1.0` was installed in
-  Copilot App from the private `msft-common-demos/AgentProof` repository.
+- **Validation context:** on 2026-09-03, the private
+  `msft-common-demos/AgentProof-Automation-Lab` contained AgentProof v0.2.0
+  repository profiles on its default branch and was added as a Copilot App
+  project.
 - **Exact reproduction:**
-  1. Open the new **Pull request** automation flow.
-  2. Observe configuration for `Opened` and `Synchronized`, **Require write
-     access**, cloud execution, and path filters.
-  3. Open the Agent picker. It lists only **Default** and **msx**; the installed
-     AgentProof Test, Security, and Policy Reviewer agents are absent.
-  4. Open the Tools picker. It defaults to **All tools selected**.
-  5. Try to establish an explicit read-only/least-privilege scope. In the
-     validated flow, no safe clear-all/select-none path is available.
-  6. Cancel the draft. Confirm that no AgentProof automation was saved.
-- **Expected:** select the exact installed AgentProof reviewer and build from no
-  tools or a reviewed least-privilege preset, with the effective scope visible
-  before confirmation.
-- **Impact:** the intended reviewer identity cannot be preserved, and saving
-  with an opaque all-tools default could grant capabilities the reviewer does
-  not need. The three AgentProof automation templates therefore cannot be
-  safely validated or represented as live.
-- **Workaround:** use the installed AgentProof reviewers in manual, read-only
-  sessions. Cancel every automation draft unless the custom reviewer and
-  effective least-privilege tool scope are both verifiable. Keep publication and
-  Evidence Assembler invocation human-controlled.
+  1. Open a new **Pull request** automation and select the lab project first.
+  2. Confirm that AgentProof Test, Security, and Policy Reviewer now appear in
+     the Agent picker.
+  3. Select the Test Reviewer, `Opened`, **Require write access**, cloud
+     execution, an exact head query, and one synthetic path.
+  4. Observe that Tools defaults to 50 selected operations and has no
+     select-none action.
+  5. Manually deselect all 29 visible mutations, leaving 21 read-only
+     issue/PR, repository/ref, Actions-log, label, and code-scanning operations.
+  6. Open lab PR #1, then switch to `Synchronized` and push synthetic commits.
+     Both event types dispatch successfully.
+  7. Observe the effective run response:
+     `Available tools include functions.apply_patch, functions.bash, and GitHub Actions tools that can access external repositories.`
+     It then returns `UNSAFE_TOOL_BOUNDARY`.
+  8. Verify the automation created no review, inline comment, or commit, then
+     disable it.
+- **Expected:** agent-profile and automation-tool restrictions compose into an
+  enforceable effective set. If the UI shows 21 read-only tools, implicit
+  `apply_patch`, shell, and broader repository access should be absent or clearly
+  shown before save.
+- **Impact:** the intended reviewer identity is selectable and events work, but
+  the effective runtime remains mutation-capable. Prompt-only restraint is not
+  an enterprise permission boundary, so the three reviewer automation templates
+  cannot be represented as live.
+- **Workaround:** use manual, read-only AgentProof reviewer sessions. Use a
+  disposable permission canary before any automation experiment and disable the
+  trigger whenever runtime capabilities exceed the reviewed scope. Keep
+  publication and Evidence Assembler invocation human-controlled.
 - **Product proposal:**
   - include installed plugin/custom agents in the automation Agent picker, with
     source, stable identity, and installed version;
   - add **Select none** plus administrator-reviewed presets such as
     **Read-only PR reviewer**, and show changes from the preset;
   - show a pre-save effective-permission preview that expands bundled/implicit
-    tools, repository and write scope, MCP/network access, and denied
-    capabilities; and
+    built-ins, repository and write scope, MCP/network access, and denied
+    capabilities, and make the preview match the runtime; and
   - expose prompt, agent/plugin version, tool scope, owner, validation date, and
     status to repository/enterprise administrators, with export, history, and
     ownership-transfer support.
@@ -92,11 +102,13 @@ must still require human review and confirmation.
 
 - **Reproduction:** start independent manual test, security, and policy reviewer
   sessions for one PR and attempt to aggregate only their current-SHA structured
-  results. The automation target is not currently validated.
+  results. Also attempt the same setup through the permission-gated PR
+  automation path.
 - **Observed gap:** the MVP needs manual reviewer sessions, a manual Evidence
-  Assembler, and custom mixed-SHA validation. The 2026-09-02 automation flow
-  could not select the installed reviewer agents or establish a safe explicit
-  tool scope.
+  Assembler, and custom mixed-SHA validation. The 2026-09-03 automation flow
+  selected the repository reviewers and dispatched events, but effective runtime
+  tools remained mutation-capable after the picker was reduced to read-only
+  operations.
 - **Impact:** manual coordination adds latency and can combine obsolete results.
 - **Workaround:** one marker per specialist, common schema/SHA, then a manual
   assembler that fails closed.
@@ -106,20 +118,19 @@ must still require human review and confirmation.
 
 ## 6. Versioned, administrator-visible automations
 
-- **Reproduction:** inspect a personal PR automation draft, then ask a repository
-  administrator to review its prompt, custom-agent/plugin version, and effective
-  tools from Git or transfer ownership. Cancel the draft rather than saving it
-  when those details cannot be verified.
-- **Observed gap:** any saved automation would be personal and stored outside
-  Git; committed prompts are only setup inputs. Enterprise App settings and
-  per-automation identity/tool scope are separate, and the validated draft did
-  not provide enough visibility to pass the save gate.
+- **Reproduction:** inspect the saved private-lab permission canary, then ask a
+  repository administrator to review its prompt, custom-agent version, 21
+  selected tools, implicit runtime built-ins, history, or ownership from Git.
+- **Observed gap:** the automation is personal and stored outside Git; committed
+  prompts are only setup inputs. The picker and runtime capability sets differ,
+  and administrators lack a repository-native versioned effective-permission
+  record.
 - **Impact:** drift, ownership, review, recovery, and fleet inventory are
   harder in governed environments.
-- **Workaround:** keep manual reviewer sessions as the MVP. For a future gated
-  experiment, commit prompt templates and maintain an inventory of owner,
-  repository, events, agent/plugin version, effective tool scope, prompt commit,
-  validation result, and review date.
+- **Workaround:** keep manual reviewer sessions as the MVP. Commit prompt/canary
+  templates, disable failed experiments, and maintain an inventory of owner,
+  repository, events, agent/plugin version, selected and runtime tool scopes,
+  prompt commit, validation result, and review date.
 - **Proposal:** optional automation-as-code with review/approval, version
   history, effective-permission preview, administrator inventory, ownership
   transfer, policy constraints, and safe deep-link import that still requires

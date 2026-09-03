@@ -1,13 +1,15 @@
 # Policy Reviewer gated automation template
 
-> **Status: future experiment; not live or validated.** The manual MVP starts
-> the installed AgentProof Policy Reviewer directly in a read-only Copilot App
-> session. This file is a versioned setup input, **not automation-as-code**.
+> **Status: blocked reviewer target; runtime-validated unsafe.** The manual MVP
+> starts the installed AgentProof Policy Reviewer directly in a read-only Copilot
+> App session. This file is a versioned setup input, **not
+> automation-as-code**.
 
-On 2026-09-02, the Pull request automation picker did not show the installed
-AgentProof reviewers; it showed only **Default** and **msx**. Tools defaulted to
-**All tools selected**, with no safe clear-all path in the validated flow. The
-draft was cancelled and no automation was saved.
+On 2026-09-03, the repository reviewer appeared after selecting the private lab
+project, and opened/synchronized events ran. After all selectable mutation tools
+were removed, 21 read-only operations remained, but the runtime still exposed
+`functions.apply_patch`, `functions.bash`, and broader Actions access. The
+candidate returned `UNSAFE_TOOL_BOUNDARY`, made no mutation, and was disabled.
 
 ## Mandatory save gate
 
@@ -17,14 +19,14 @@ draft was cancelled and no automation was saved.
   approved plugin source and version visible. Do not substitute **Default** or
   **msx**.
 - Tool selection starts from select-none or an approved least-privilege preset.
-- An effective-permission preview shows only the required repository, PR, diff,
-  check, and same-SHA evidence reads.
+- Both the picker and a disposable runtime canary show only the required
+  repository, PR, diff, check, and same-SHA evidence reads.
 - Any comment publication is a separately visible, bounded update to one
   marker-delimited comment. If that cannot be verified, keep publication
   manual and grant the reviewer no mutation tool.
 - Push, merge, approval, branch/issue mutation, secrets, deployment,
-  cross-repository access, unrelated MCP, and broad shell/network tools are
-  absent.
+  cross-repository access, unrelated MCP, implicit edit/apply-patch, and broad
+  shell/network tools are absent.
 - A human reviews and confirms the personal, single-repository, outside-Git
   configuration.
 
@@ -51,6 +53,10 @@ Paste the text below after replacing placeholders:
 
 ```text
 Review pull requests in <OWNER>/<REPO> as the AgentProof Policy Reviewer.
+
+Before using any tool, inspect the effective runtime inventory. If any mutation,
+edit/apply-patch, shell, secret, deployment, or cross-repository capability is
+available, return only UNSAFE_TOOL_BOUNDARY and stop without calling a tool.
 
 You are read-only. Return content for the automation's bounded pull-request
 comment publisher between these markers; do not invoke a mutation tool:
@@ -109,7 +115,7 @@ AgentProof / gate and native GitHub records are authoritative."
 ```
 
 Review and confirm any deep link. Apply the mandatory save gate before saving.
-If a future experiment passes it, test a synthetic PR that changes policy and
-verify the session still cites protected-base policy. Never include secrets or
-customer data, and never present the result as a legal or compliance
+If a future product version passes it, test a synthetic PR that changes policy
+and verify the session still cites protected-base policy. Never include secrets
+or customer data, and never present the result as a legal or compliance
 determination.

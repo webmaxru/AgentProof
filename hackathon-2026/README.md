@@ -9,6 +9,7 @@ without event-specific positioning or deadlines.
 
 | Path | Purpose |
 | --- | --- |
+| `winning-criteria-matrix.md` | Judge-facing mapping from winning criteria to current product evidence, demo proof, and remaining actions. |
 | `video-recording-guide.md` | Production plan, privacy controls, capture setup, live-demo procedure, fallback protocol, and post-production checklist. |
 | `video-script.md` | A time-coded, voiceover-ready script for a 2:54 final cut. |
 | `recording-checklist.md` | Printable go/no-go checklist for the presenter and editor. |

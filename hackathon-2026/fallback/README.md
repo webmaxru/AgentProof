@@ -1,6 +1,6 @@
 # Demo fallback assets — PRECOMPUTED / NOT LIVE
 
-Everything shown from this folder or `demo/synthetic-findings.json` is a
+Everything shown from this folder or `../../demo/synthetic-findings.json` is a
 continuity aid and must be labeled:
 
 ```text
@@ -15,7 +15,7 @@ GitHub approval, immutable canvas record, or current compliance result.
 
 1. **Preferred:** a screen capture of an earlier real AgentProof run, retaining
    its real repository/PR/SHA/check context after redaction.
-2. **Secondary:** the wholly synthetic `demo/synthetic-findings.json` fixture
+2. **Secondary:** the wholly synthetic `../../demo/synthetic-findings.json` fixture
    loaded into Evidence Board to demonstrate UI behavior only.
 3. **Last resort:** static redacted screenshots showing the intended navigation
    with an explanatory caption.

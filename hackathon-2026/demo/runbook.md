@@ -5,8 +5,28 @@
 Show live GitHub/App state whenever available. A completed real check may be
 opened after it ran; that is still a real record. If any screenshot, clip, or
 fixture substitutes for live state, display **PRECOMPUTED / NOT LIVE** for its
-entire use and say so. Never present `demo/synthetic-findings.json` as scanner
+entire use and say so. Never present `../../demo/synthetic-findings.json` as scanner
 output.
+
+## Hackathon 2026 submission preflight
+
+The recommended executive challenge is [Hack to Make Agents
+Trustworthy](https://innovation-studio.microsoft.com/events/hackathon2026/challenges/executive-challenges).
+The recording must prove the product thesis, not merely describe the
+architecture:
+
+- Start with the unsafe PR and end with fresh same-SHA evidence plus
+  independent approval.
+- Show the full head SHA, deterministic `AgentProof / gate`, evidence digest,
+  bounded disposition, remediation commit, and stale-SHA invalidation.
+- Record measured baseline-versus-trial outcomes; never substitute targets for
+  results.
+- Replace every placeholder and remove account details, notifications,
+  customer data, tenant links, secrets, and unrelated browser content.
+- Keep the permission canary disabled and describe `UNSAFE_TOOL_BOUNDARY` as a
+  deliberate fail-closed result.
+- Keep the complete sequence within the existing 2:54 storyboard and verify
+  the final upload deadline in Innovation Studio before submission.
 
 ## Required placeholders
 
@@ -92,7 +112,7 @@ isolated, manually started, read-only sessions.
 
 ## Exact live sequence
 
-Follow `demo/storyboard.md` without adding time:
+Follow `storyboard.md` without adding time:
 
 1. **0:00:** show unsafe SHA/origin and red gate.
 2. **0:14:** show check evidence and all three manually started, read-only,
@@ -139,7 +159,7 @@ Follow `demo/storyboard.md` without adding time:
 ## Continuity fallback
 
 If a live App surface fails or a workflow exceeds the segment budget, follow
-`demo/fallback/README.md`. Use only a previously captured real run or the
+`../fallback/README.md`. Use only a previously captured real run or the
 synthetic fixture with the required persistent label. State what is simulated,
 return to live GitHub authority as soon as possible, and never splice a
 different SHA into the same claimed evidence chain.

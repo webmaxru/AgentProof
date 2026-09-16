@@ -263,9 +263,6 @@ removes a required retention field. Confirm the live collector produces the
 expected findings; if the advisory service or dependency metadata changed, stop
 and repair the demo rather than present the synthetic fixture as a scan.
 
-Follow the [runbook](demo/runbook.md) for disposition, real remediation,
-new-SHA invalidation, rerun, and independent review.
-
 ## Evidence states
 
 | State       | Meaning                                                               | Default gate effect                                               |
@@ -386,9 +383,6 @@ Measure a baseline and a trial; do not report targets as achieved results.
 
 - Customer policy and permission adaptation:
   [customer adaptation guide](templates/customer-adaptation-guide.md)
-- Exact competition sequence: [storyboard](demo/storyboard.md) and
-  [runbook](demo/runbook.md)
-- Clearly labeled continuity assets: [fallback guidance](demo/fallback/README.md)
 - Remove the manual sessions, plugin, ruleset, branches, artifacts, disabled
   permission canary, and synthetic repositories by following
   [cleanup](docs/cleanup.md).

@@ -1,4 +1,15 @@
-# Three-slide competition outline
+# Microsoft Global Hackathon 2026 — three-slide competition outline
+
+**Primary executive challenge:** [Hack to Make Agents
+Trustworthy](https://innovation-studio.microsoft.com/events/hackathon2026/challenges/executive-challenges)
+
+**Submission thesis:** AgentProof prevents AI-assisted changes from merging
+until the exact commit has earned deterministic evidence and an accountable
+human decision.
+
+**Judge promise:** Show a real red-to-green release decision, not a research
+demo: same-SHA evidence, explicit human disposition, new-SHA invalidation,
+fresh evidence, and independent approval.
 
 Use 16:9, large text, captions, and only redacted synthetic screenshots. Replace
 all placeholders before recording.
@@ -69,3 +80,14 @@ multi-agent aggregation, and versioned/admin-visible automations.
 
 **Speaker line:** “The green result is bounded to this repository, policy, and
 SHA; it is evidence, not universal compliance or provenance.”
+
+## Submission quality bar
+
+- Show measured baseline-versus-trial outcomes for review time, findings found
+  before merge, explicit disposition rate, and stale-SHA rejection.
+- Keep the disabled permission canary visible as evidence that AgentProof stops
+  when the host exposes unsafe mutation capability.
+- Name GitHub checks, comments, reviews, artifacts, and commits as the
+  authoritative record; label the Evidence Board as mutable coordination state.
+- Do not claim universal provenance, compliance, security, automatic approval,
+  or live reviewer automations.

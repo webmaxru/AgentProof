@@ -11,12 +11,12 @@ claim universal model provenance.
 Produce one 16:9 video with a maximum runtime of **2 minutes 54 seconds**.
 Use the following deliverables while editing:
 
-| Deliverable | Required | Description |
-| --- | --- | --- |
-| `agentproof-live-master.mp4` | Yes | Final video with live GitHub/App footage and voiceover. |
-| `agentproof-live-master.srt` | Recommended | Human-readable captions matching the final narration. |
-| `agentproof-silent-draft.mp4` | Optional | Timing/reference draft. It must remain labeled as precomputed and not live. |
-| `agentproof-shot-log.md` | Recommended | Actual takes, source URLs, SHAs, and any continuity substitutions. |
+| Deliverable                    | Required    | Description                                                                         |
+| ------------------------------ | ----------- | ----------------------------------------------------------------------------------- |
+| `agentproof-live-master.mp4`   | Yes         | Final video with live GitHub/App footage and voiceover.                             |
+| `agentproof-live-master.srt`   | Recommended | Human-readable captions matching the final narration.                               |
+| `agentproof-silent-draft.mp4`  | Optional    | Timing/reference draft. It must remain labeled as precomputed and not live.         |
+| `agentproof-shot-log.md`       | Recommended | Actual takes, source URLs, SHAs, and any continuity substitutions.                  |
 | `agentproof-privacy-review.md` | Recommended | Confirmation that no secrets, customer data, tenant links, or personal UI appeared. |
 
 The final master must not imply that the silent draft is live evidence. If a

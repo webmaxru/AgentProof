@@ -7,17 +7,17 @@ without event-specific positioning or deadlines.
 
 ## Contents
 
-| Path | Purpose |
-| --- | --- |
-| `winning-criteria-matrix.md` | Judge-facing mapping from winning criteria to current product evidence, demo proof, and remaining actions. |
-| `video-recording-guide.md` | Production plan, privacy controls, capture setup, live-demo procedure, fallback protocol, and post-production checklist. |
-| `video-script.md` | A time-coded, voiceover-ready script for a 2:54 final cut. |
-| `recording-checklist.md` | Printable go/no-go checklist for the presenter and editor. |
-| `demo/storyboard.md` | Original shot storyboard and timing budget. |
-| `demo/runbook.md` | Live validation and presenter runbook. |
-| `fallback/README.md` | Rules for continuity footage and clearly labeled precomputed material. |
-| `slides/outline.md` | Three-slide pitch outline and submission quality bar. |
-| `assets/` | Generated title cards, captions, and draft media. |
+| Path                         | Purpose                                                                                                                  |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `winning-criteria-matrix.md` | Judge-facing mapping from winning criteria to current product evidence, demo proof, and remaining actions.               |
+| `video-recording-guide.md`   | Production plan, privacy controls, capture setup, live-demo procedure, fallback protocol, and post-production checklist. |
+| `video-script.md`            | A time-coded, voiceover-ready script for a 2:54 final cut.                                                               |
+| `recording-checklist.md`     | Printable go/no-go checklist for the presenter and editor.                                                               |
+| `demo/storyboard.md`         | Original shot storyboard and timing budget.                                                                              |
+| `demo/runbook.md`            | Live validation and presenter runbook.                                                                                   |
+| `fallback/README.md`         | Rules for continuity footage and clearly labeled precomputed material.                                                   |
+| `slides/outline.md`          | Three-slide pitch outline and submission quality bar.                                                                    |
+| `assets/`                    | Generated title cards, captions, and draft media.                                                                        |
 
 ## Recommended submission framing
 

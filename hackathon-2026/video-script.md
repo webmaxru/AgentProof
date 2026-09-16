@@ -134,7 +134,7 @@ decision is silently carried forward.
 > change. AgentProof fails closed until the new revision earns fresh evidence.
 
 **Edit note:** This is the most important trust proof. Give it more screen
-  time than the implementation details.
+time than the implementation details.
 
 ## 1:51–2:12 — Fresh evidence for the remediated head
 
@@ -154,8 +154,8 @@ disposition. Show the evidence digest.
 > copied from the previous revision.
 
 **Edit note:** If the live workflow is still running, use the completed live
-  check after it finishes. Do not use the synthetic JSON as if it were scanner
-  output.
+check after it finishes. Do not use the synthetic JSON as if it were scanner
+output.
 
 ## 2:12–2:32 — Green gate, then independent approval
 
@@ -173,7 +173,7 @@ head SHA. Transition to the independent reviewer profile and show approval.
 > alone cannot approve, and approval alone cannot bypass a red gate.
 
 **Edit note:** End this segment with merge available, but leave the merge action
-  untouched.
+untouched.
 
 ## 2:32–2:43 — State the enterprise boundary
 
@@ -190,7 +190,7 @@ head SHA. Transition to the independent reviewer profile and show approval.
 > prove universal authorship, legal compliance, or production suitability.
 
 **Edit note:** Keep this honest limitation visible before the final boundary
-  test.
+test.
 
 ## 2:43–2:54 — Fail closed on unsafe automation
 
@@ -210,7 +210,7 @@ or re-enable the automation.
 > unsafe runtime is part of the product.
 
 **Edit note:** Cut to black at 2:54. Do not add an outro, logo animation, or
-  unbounded claim after the boundary result.
+unbounded claim after the boundary result.
 
 ## Optional alternate voiceover opening
 

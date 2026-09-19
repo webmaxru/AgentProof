@@ -1,71 +1,72 @@
-# Winning-criteria matrix
+# Executive Challenge judging: five-category evidence plan
 
-This matrix turns the project into a submission checklist. It separates what
-the repository already demonstrates from what must be shown in the live
-recording. It deliberately avoids claiming a legal, compliance, security, or
-provenance determination.
+This matrix uses **exactly the five categories supplied by the project owner**.
+No weights, hidden criteria, win probabilities, or readiness scores are
+invented. The video target is **1:56**, with a hard **2:00** ceiling.
 
-## Executive summary
+**Positioning:** current, commit-bound release evidence and explicit human
+accountability for engineering teams using Copilot. The recommended challenge
+fit remains **Hack to Make Agents Trustworthy**, subject to the event's
+current authenticated challenge list and eligibility rules.
 
-**Positioning:** AgentProof makes AI-assisted software delivery trustworthy by
-binding deterministic evidence and accountable human decisions to the exact
-commit that would be released.
+## The rubric and the visible answer
 
-**Primary challenge fit:** Hack to Make Agents Trustworthy.
+| Category           | Supplied description                                                                                                                                                                                                             | What the film should make a judge understand                                                                                                                  | Time and visible evidence                                                                                                                                                             | Remaining gap                                                                                                                                                                                                             |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Inspiration**    | Project brings energy, excitement, fresh perspective, novelty, or delight.                                                                                                                                                       | A human exception can be unexpired and still be inapplicable: decisions must follow the exact code. A green evidence gate is also not human approval.         | **0:00-0:10:** actual A-to-B stale-disposition result. **0:52-1:09:** green gate with review still required. **1:43-1:56:** memorable accountability close.                           | The source shots have not been captured for this cut. The animatic alone cannot deliver a working-product surprise.                                                                                                       |
+| **Business Value** | Project brings monetary or non-monetary business value to Microsoft. For example, revenue, profitability, market share, brand recognition, customer loyalty, customer retention, customer satisfaction, or enables philanthropy. | More confident adoption of GitHub/Copilot workflows and less evidence chasing are plausible Microsoft benefits worth testing.                                 | **1:25-1:43:** explicitly labeled value hypothesis and proposed pilot. Relevant GitHub/Copilot surfaces appear throughout, not as decorative logos.                                   | No measured time savings, adoption lift, revenue, retention, or satisfaction results exist. Do not imply otherwise.                                                                                                       |
+| **Customer Focus** | Project has a clear target audience and is a compelling solution for them.                                                                                                                                                       | A release lead reviewing fast-moving Copilot-assisted changes needs to know whether facts and decisions apply to today's code.                                | **0:10-0:23:** name the user and their question. **0:39-1:09:** show the decision they can actually make from current evidence.                                                       | Representative release-lead feedback and observed workflow pain need validation; no customer interview or demand claim is made.                                                                                           |
+| **Feasibility**    | Project appears to have a viable pathway forward to implementation.                                                                                                                                                              | This is a bounded working prototype on existing GitHub infrastructure, with manual advisory steps and a small measurable pilot path.                          | **0:23-0:39:** actual collectors and protected policy. **1:09-1:25:** Actions, live rules, manual specialists/assembly, and GitHub authority. **1:25-1:43:** proposed two-team pilot. | Verify the recording repository's real configuration. Safe reviewer-tool boundaries remain a prerequisite; the automatic-reviewer canary is disabled. Production hardening and organizational approvals are not complete. |
+| **Make Something** | Project goes beyond an idea, they made or created something that can be shown or demonstrated; technical code, sales/marketing plan, product features, internal processes, customer engagement tools, etc.                       | AgentProof has implemented checks, evidence artifacts, disposition validation, and a board; show their behavior rather than describing an architecture slide. | **0:00-1:25:** genuine synthetic-app records for A and B, failure/unknown/exception/pass states, the stale decision, and a current-SHA gate.                                          | Real product footage, presenter's voiceover, timed final captions, and a completed sanitized shot log remain outstanding. The checked-in MP4 is precomputed cue cards.                                                    |
 
-**Proof pattern:** unsafe change -> red gate -> same-SHA specialist context ->
-bounded human disposition -> remediation -> new-SHA invalidation -> fresh
-evidence -> independent approval.
+## Proposed pilot: a credible path, not an achieved result
 
-## Matrix
+**Proposal, not a committed deployment:** two consenting engineering teams,
+one approved repository per team, and a two-week observation window. Start
+with policies the repository owners explicitly agree to. Record the actual
+number and mix of PRs; two teams is not a statistically sufficient sample by
+itself.
 
-| Winning criterion                     | What judges need to see                                                        | Current project evidence                                                                                                                                                                                                    | Required recording proof                                                                                                                                      | Status                            |
-| ------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
-| Meaningful problem and customer value | A painful problem, a clear user, and a measurable outcome.                     | The project addresses the gap between fast AI-assisted coding and accountable release decisions. Roles, trust boundaries, and success measures are documented in the root README and architecture docs.                     | Open with the unsafe PR and explain the release-manager pain in one sentence. Show the red-to-green workflow and state the baseline/trial metrics to measure. | Ready for live proof              |
-| Originality and innovation            | A distinctive insight, not a generic chatbot or wrapper.                       | The product is commit-bound evidence and human governance, not code generation. It distinguishes deterministic collectors, advisory specialists, human disposition, and independent approval.                               | Show the old SHA becoming stale after remediation. This is the memorable differentiator.                                                                      | Ready for live proof              |
-| Technical quality                     | A working, coherent, reproducible implementation.                              | GitHub Actions analysis/publish workflows, protected-base policy evaluation, versioned evidence schema, SHA/digest checks, disposition validation, plugin reviewers, assembler, and Evidence Board are implemented.         | Show one completed live check, the evidence artifact, matching SHA/digest, and the final green check.                                                         | Ready for live proof              |
-| Microsoft technology alignment        | Meaningful use of Microsoft/GitHub technology, not logo placement.             | The solution uses GitHub Actions, GitHub checks/artifacts/comments/reviews/rules, GitHub Copilot App/plugin surfaces, and a Copilot Evidence Board extension.                                                               | Keep the GitHub/Copilot surfaces visible and explain what each contributes. Do not add a service only for branding.                                           | Ready                             |
-| Trustworthy and responsible AI        | Guardrails, least privilege, human accountability, and honest limits.          | No-secret analysis, read-only reviewer profiles, protected-base policy, distinct evidence states, fail-closed unknowns, bounded exceptions, independent review, and a disabled permission canary are documented and tested. | Show the mutable-board authority banner, the bounded exception, independent approval, and `UNSAFE_TOOL_BOUNDARY`.                                             | Ready for live proof              |
-| User experience                       | A workflow that a real operator can understand and use.                        | The flow has explicit roles, human checkpoints, reviewer specialists, assembler, and a visual Evidence Board. The packet includes a timed storyboard and capture guide.                                                     | Keep each UI state on screen long enough to read the SHA, finding state, and check name. Use the scripted lower-thirds.                                       | Ready for live proof              |
-| Business impact and scale             | A credible path beyond a one-off demo.                                         | The kit is model-neutral, policy-versioned, repository-adaptable, and includes customer adaptation guidance, success measures, and a roadmap for enforceable least privilege and signed attestations.                       | State the measurable trial plan and show how the same control loop applies to other repositories and policies. Do not present targets as achieved.            | Ready with measured results       |
-| Security and data discipline          | The demo does not leak sensitive data and the design handles trust boundaries. | Synthetic expense data only; no secrets in analysis; explicit trust-boundary and threat-model documentation; no customer data in prompts, fixtures, logs, or media.                                                         | Use a clean browser profile and show only synthetic/redacted material. Complete the privacy checklist and shot log.                                           | Ready with final privacy review   |
-| Demo quality and storytelling         | A concise, credible narrative with visible proof.                              | A 2:54 storyboard, time-coded script, recording guide, checklist, caption file, and silent timing draft are checked in under this folder.                                                                                   | Replace cue cards with live capture, record voiceover, keep the full sequence within 2:54, and end on the honest automation boundary.                         | Draft ready; live capture pending |
-| Reproducibility and handoff           | Another person can repeat the demo and understand what is real.                | Runbook, fallback rules, shot-log template, artifact manifest, and explicit `PRECOMPUTED / NOT LIVE` labeling are included.                                                                                                 | Fill the shot log with real SHAs, workflow URLs, reviewer labels, digest, expiry, and privacy reviewer after the final take.                                  | Ready for final take              |
+Compare matched or reasonably comparable changes within each team, with and
+without the evidence view. Document differences in change size, reviewer
+experience, required checks, and learning effects. Do not report a causal
+productivity claim from an uncontrolled before/after comparison.
 
-## Required evidence package
+| Question                               | Measurement                                                                                                 | Success condition to agree before the pilot                                                                 |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Is review less laborious?              | Actual human minutes locating evidence and deciding what to do; distinguish this from CI elapsed time.      | A team-agreed, observed improvement without weakened controls. No percentage target is claimed as achieved. |
+| Do stale decisions remain ineffective? | Controlled same-PR new-SHA cases, including an unexpired exception, with the observed current gate outcome. | Every tested stale disposition remains ineffective; report the sample count and any failures.               |
+| Are evidence states preserved?         | Missing evidence, eligible exception, and non-exceptionable failure cases.                                  | Unknown does not become pass; accepted exception remains exception; protected failures remain blocking.     |
+| Is the human boundary intact?          | Green gate without required approval, red gate with approval, and independent-review configuration.         | Required controls still block; no bypass, automatic approval, or agent merge.                               |
+| Is the workflow understandable?        | Representative reviewers explain which commit was evaluated and who still owns the decision.                | Record actual observations and revise confusing UX; do not turn a few opinions into an adoption metric.     |
 
-Before the final upload, collect these artifacts:
+Use approved synthetic or appropriately authorized repository evidence. Do
+not place customer data, private evidence, tenant links, or secrets into this
+packet. Obtain any required internal data/repository approvals before a real
+deployment.
 
-1. A live master video with voiceover and captions.
-2. The completed shot log with unsafe and remediated SHAs.
-3. The final evidence artifact digest and workflow URL.
-4. A privacy review confirming that no sensitive content appears.
-5. A one-page metrics note containing baseline, trial, sample size, and
-   measurement window for review time, findings found before merge, explicit
-   disposition rate, and stale-SHA rejection.
-6. The final slide deck with no placeholders.
+## Before describing the submission as finished
 
-## Claims that are allowed
+- Capture the first-ten-second result and the current-SHA proof from one
+  coherent, genuine synthetic scenario.
+- Retain exact SHAs, policy identity, artifact identity, capture timestamps,
+  expiry, and human-decision provenance in an approved evidence record.
+  The shareable shot log contains sanitized references only.
+- Add the presenter's voiceover and retime every caption to that recording.
+- Keep the final container at or below 120 seconds; target 116.
+- Show the human-review boundary, whether approval remains required or an
+  actual independent review is available. Never fabricate the latter.
+- Confirm privacy, current upload rules, event eligibility, and repository
+  visibility/access requirements with the authorized sources.
 
-- “AgentProof evaluates configured evidence for this repository, policy, and
-  pull-request head SHA.”
-- “The gate fails closed for unresolved findings.”
-- “A new head SHA invalidates prior evidence and dispositions.”
-- “GitHub records remain authoritative; the Evidence Board is mutable.”
-- “The permission canary stopped when unsafe mutation capability remained
-  visible.”
+Do not claim that every category has been "won" or is complete merely because
+it appears in the script. The prototype, the recording, and measured customer
+value are different evidence levels.
 
-## Claims that are not allowed
+## Supporting rationale
 
-- Universal compliance, legal approval, or regulatory certification.
-- Universal security, privacy, or production-suitability certification.
-- Verified authorship or universal model provenance.
-- Automatic human approval, automatic merge, or an immutable canvas.
-- Three live reviewer automations when the supported MVP uses manual launches.
-
-## Final readiness gate
-
-The submission is ready only when every row marked “live proof” has been shown
-in the master video, every metric is backed by an actual baseline/trial value,
-all placeholders are removed, the privacy review is complete, and the final
-voiceover preserves the bounded claims above.
+[Video strategy and sources](video-strategy.md) documents the hook, the
+research limitations, and claim-to-implementation mapping.
+[The script](video-script.md) contains the exact narration and screen direction;
+[the recording guide](video-recording-guide.md) explains how to capture it
+without manufacturing evidence or human decisions.

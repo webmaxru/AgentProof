@@ -1,46 +1,64 @@
-# Recording checklist
+# Final recording go/no-go checklist
 
-Use this as the final go/no-go sheet. Mark every item before releasing the
-video or sharing the draft.
+Use this for the **real master**, not merely the precomputed storyboard.
+No unchecked prerequisite becomes true because the script describes it.
 
-## Live evidence
+## First ten seconds and story
 
-- [ ] Unsafe pull request is synthetic and disposable.
-- [ ] Unsafe head SHA is recorded privately and visible in the take.
-- [ ] Red `AgentProof / gate` is complete before reviewer sessions begin.
-- [ ] Final/raw evidence links match the repository, PR number, policy, and
-      current head SHA.
-- [ ] Test, Security, and Policy reviewer results are isolated and read-only.
-- [ ] Evidence Board authority banner is visible.
-- [ ] Exception is eligible, specific, authorized, expiring, and current-SHA.
-- [ ] Remediation commit creates a visibly different head SHA.
-- [ ] Old evidence, exception, and approval are shown stale or ineffective.
-- [ ] Fresh evidence and any fresh reviewer fragments match the new SHA.
-- [ ] Final artifact digest is visible and matches the final evidence.
-- [ ] Independent reviewer is not the author or release decision-maker.
-- [ ] Merge is shown as available but is not clicked.
-- [ ] Permission canary remains disabled after `UNSAFE_TOOL_BOUNDARY`.
+- [ ] The first frame contains evidence, not a greeting or logo slate.
+- [ ] "The code changed. Should the old exception still count?" is clearly heard.
+- [ ] The old exception is genuinely unexpired at capture.
+- [ ] A and B are different full SHAs from the same synthetic scenario.
+- [ ] The actual `stale` result is visible before 0:10 and held long enough to understand.
+- [ ] The release-lead audience is named by 0:23.
+- [ ] Microsoft value is a hypothesis, not an invented business result.
+- [ ] The pilot is visibly proposed, and the close returns to accountability.
 
-## Privacy
+## Evidence and human boundaries
 
-- [ ] No secrets, tokens, password managers, environment variables, or
-      authentication prompts appear.
-- [ ] No customer data, tenant links, customer repository names, or personal
-      email/chat/calendar content appears.
-- [ ] No browser notifications, unrelated tabs, avatars, bookmarks, or
-      account identifiers appear.
-- [ ] All synthetic screenshots and fallback clips carry
-      `PRECOMPUTED / NOT LIVE` for their full duration.
-- [ ] The voiceover does not use legal, compliance, provenance, or universal
-      security language.
+- [ ] The policy is from the protected base revision.
+- [ ] Real collector output supports test/dependency failure and remediation.
+- [ ] Raw `unknown`, accepted `exception`, `fail`, and `pass` remain distinct.
+- [ ] `stale` refers to the old disposition, not a fifth finding state.
+- [ ] Both shown exception decisions are genuine, eligible, authorized human records.
+- [ ] The B decision is not an automatic reuse of the A decision.
+- [ ] The final check/artifact/policy/head bindings agree.
+- [ ] Actual repository configuration supports the shown review requirement.
+- [ ] Green evidence is not presented as human approval or permission to merge.
+- [ ] No agent accepted an exception, approved, merged, or released.
+- [ ] Any advisory sessions were actually read-only and manually launched.
+- [ ] Assembly is manual; the board is mutable coordination, not enforcement.
+- [ ] The unsafe-tool-boundary canary remains disabled.
 
-## Technical export
+## All five supplied criteria
 
-- [ ] 16:9 output at 1920x1080 or 1280x720.
-- [ ] 30 fps, readable cursor, and no dropped frames.
-- [ ] Runtime is at most 2:54.
-- [ ] Captions match the final narration.
-- [ ] Voiceover is intelligible over UI audio.
-- [ ] Full SHA and check name remain readable on a normal laptop screen.
-- [ ] Final MP4 plays from start to finish after export.
-- [ ] Shot log and privacy review are stored beside the draft/master.
+- [ ] **Inspiration:** the early stale result is surprising and understandable.
+- [ ] **Business Value:** Microsoft's GitHub/Copilot opportunity and measurement plan are explicit.
+- [ ] **Customer Focus:** a release lead's concrete decision is central.
+- [ ] **Feasibility:** real integration, honest manual limits, and a viable pilot are shown.
+- [ ] **Make Something:** actual product behavior replaces cue-card placeholders.
+
+## Privacy and truthfulness
+
+- [ ] No secrets, credentials, customer data, tenant links, private evidence, or personal notifications appear.
+- [ ] Source records use approved storage; the shareable shot log is sanitized.
+- [ ] Full synthetic SHAs are legible; private repository links and identities are not exposed.
+- [ ] Recorded footage is not described as a continuous live execution.
+- [ ] Any fallback carries `PRECOMPUTED / NOT LIVE` for its entire duration.
+- [ ] No fabricated checks, reviews, approvals, metrics, testimonials, or customer counts appear.
+- [ ] No legal/compliance, universal safety, provenance, or production-readiness determination is claimed.
+
+## Actual export
+
+- [ ] 16:9, legible at 720p; preferred master is 1920x1080 at 30 fps.
+- [ ] Container duration is **at most 120 seconds**; target is 116.
+- [ ] Every spoken word is captioned and retimed to the presenter's real voice.
+- [ ] Captions do not cover SHA, expiry, finding state, or gate/review requirements.
+- [ ] Audio is intelligible, consistent, and free of clipping.
+- [ ] The exported master has been watched end to end, not only inspected in an editor.
+- [ ] The first-ten-second result and final frame survive encoding.
+- [ ] Current authenticated event upload and repository-sharing rules have been checked separately.
+- [ ] The genuine master, sanitized shot log, and privacy review exist before submission.
+
+The checked-in silent draft is a rehearsal aid. It does **not** satisfy the
+last item or establish a recorded end-to-end product demonstration.

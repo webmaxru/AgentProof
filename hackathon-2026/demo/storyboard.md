@@ -1,28 +1,41 @@
-# AgentProof demo storyboard — 2:54
+# AgentProof edit decision list: 1:56
 
-Primary footage uses real GitHub records and manually started App sessions. Any
-continuity clip or fixture must carry an on-screen **PRECOMPUTED / NOT LIVE**
-label.
+**Hard ceiling: 2:00.** The 116-second target leaves four seconds of reserve,
+not an invitation to append a title or credits. This limit comes from the
+project owner. Event-specific upload rules must be confirmed separately.
 
-Before 0:00, let the PR-triggered deterministic Analysis/Publish path finish.
-Then manually start the three installed read-only reviewer agents through
-user-confirmed launches or deep links, verify the full SHA, and run the Evidence
-Assembler manually. These setup actions are not presented as automations.
-Keep the disabled private-lab permission-canary result ready for the final
-boundary callout.
+Exact narration and granular direction live in
+[video-script.md](../video-script.md); machine-readable timing is in
+[video-timeline.json](../assets/video-timeline.json). Do not maintain a
+second, divergent voice script here.
 
-| Time      | Duration | On screen and exact action                                                                                                                                    | Narration                                                                                                                                                                  |
-| --------- | -------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0:00–0:14 |      14s | Open synthetic PR at unsafe head SHA; highlight `self-declared: Claude-assisted` and red required check.                                                      | “AI-assisted code can come from any model. AgentProof asks one narrower question: did this exact commit earn evidence and a human decision?”                               |
-| 0:14–0:31 |      17s | Open `AgentProof / gate`; show full head SHA and links. Then show three manually started, read-only specialist sessions with the same SHA.                    | “No-secret deterministic collectors found the facts. I then started three isolated read-only reviewers for test, security, and policy evidence on that same SHA.”          |
-| 0:31–0:51 |      20s | Show the manual assembly result. On the Evidence Board, highlight dependency `fail`, authorization marker `fail`, retention `unknown`, and authority banner.  | “I ran the assembler manually. The board shows two failures and one unknown, but it is mutable coordination; GitHub records and the evidence artifact are authoritative.”  |
-| 0:51–1:09 |      18s | Select retention finding, draft exact exception command, paste/submit it as release-manager PR comment. Show dependency/test still blocking.                  | “A release manager can accept only a policy-eligible, reasoned, expiring exception. That does not excuse the two failures or replace code review.”                         |
-| 1:09–1:33 |      24s | Switch to prepared Copilot remediation session; show the dependency upgrade and stable marker restored on the existing behavioral test; push the real commit. | “A remediation session fixes the dependency and restores the required test marker. The push creates a new head SHA.”                                                       |
-| 1:33–1:51 |      18s | PR: highlight new SHA, stale prior exception, dismissed approval, and rerunning gate.                                                                         | “The new commit invalidates old evidence, the exception, and stale approval. AgentProof fails closed instead of carrying a green decision forward.”                        |
-| 1:51–2:12 |      21s | Open completed new-SHA evidence: two remediated findings pass, retention remains unknown. Submit a newly drafted exception naming the new SHA.                | “Fresh evidence proves the fixes. Retention is still unknown, so the release manager records a new bounded exception for this SHA—not the old one.”                        |
-| 2:12–2:32 |      20s | Refresh to green `AgentProof / gate`; open final artifact/check summary and match full SHA/digest.                                                            | “The protected-base evaluator validates the live SHA, policy digest, disposition, and artifact digest. Only then does the required gate turn green.”                       |
-| 2:32–2:43 |      11s | Separate reviewer account approves; show ruleset changing merge from blocked to available. Do not merge.                                                      | “A different human approves. Green evidence alone was insufficient, and approval alone could not bypass a red gate.”                                                       |
-| 2:43–2:54 |      11s | Show the disabled permission-canary result (`apply_patch`, `bash`, `UNSAFE_TOOL_BOUNDARY`), then the kit/limits slide.                                        | “We also tested PR automation. It fired, but hidden mutation tools remained, so AgentProof stopped; I disabled it—evidence of the product gap, not a fake automation win.” |
+| Time      | Duration | Spoken words | Average pace | Picture and edit                                                                                                                  | Main overlay                               |
+| --------- | -------: | -----------: | -----------: | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| 0:00-0:10 |      10s |           18 |      108 wpm | A's real human exception, actual new head B, future expiry, then actual stale disposition by approximately 0:08. Hold the result. | `Not expired. Wrong commit.`               |
+| 0:10-0:23 |      13s |           28 |      129 wpm | B's evidence and human-decision reference; optional actual board with authority warning.                                          | `For release leads on teams using Copilot` |
+| 0:23-0:39 |      16s |           31 |      116 wpm | Label the return to A: real failure findings, raw retention unknown, and protected base policy.                                   | `Working prototype                         | synthetic expense app` |
+| 0:39-0:52 |      13s |           27 |      125 wpm | A decision's SHA/reason/expiry, B's current full SHA, and actual stale result.                                                    | `A's exception cannot satisfy B's gate`    |
+| 0:52-1:09 |      17s |           36 |      127 wpm | Fresh B evidence, genuine B human decision, distinct exception state, green gate, independent review still required.              | `Gate satisfied != human approval`         |
+| 1:09-1:25 |      16s |           36 |      135 wpm | Completed Actions result, actual rules, manual advisory entry point, board/GitHub authority boundary.                             | `Manual advice. GitHub records and rules.` |
+| 1:25-1:43 |      18s |           37 |      123 wpm | Clearly editorial Microsoft-value hypothesis and proposed two-team pilot. No fabricated results.                                  | `PROPOSED PILOT                            | Not yet measured`      |
+| 1:43-1:56 |      13s |           21 |       97 wpm | Return to actual B evidence and human boundary; close on product name and two short lines.                                        | `Current evidence. Accountable humans.`    |
 
-**Total: 2 minutes 54 seconds.** Six seconds remain below the competition
-maximum; do not add an intro slate or outro beyond this timeline.
+**Total: 116 seconds, 234 spoken words.** The full-cut average is about
+121 words/minute. Pauses are intentional. Actual narration still needs a
+timed read-through.
+
+## Editing invariants
+
+- Real product footage is labeled `Recorded synthetic scenario | workflow waits omitted`.
+- A and B label genuine different full SHAs from one coherent scenario.
+- The opening is a preview of the result, not a claim of instantaneous CI.
+  Earlier A footage is explicitly labeled when revisited.
+- The A exception is unexpired at capture but stale for B.
+- Retention moves from raw `unknown` to an accepted `exception`, never a
+  fictitious `pass`.
+- A green gate is shown separately from the independent human-review
+  requirement. No agent approval or merge is filmed.
+- The board is mutable coordination; GitHub is the authority.
+- All generated cue-card footage carries `PRECOMPUTED / NOT LIVE`.
+- If required source records are unavailable, use the script's honest
+  alternative and retime it. Do not keep unsupported narration.

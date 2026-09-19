@@ -1,39 +1,162 @@
 1
-00:00:00,000 --> 00:00:14,000
-AI-assisted change - current head SHA
+00:00:00,000 --> 00:00:01,500
+The code changed.
 
 2
-00:00:14,000 --> 00:00:31,000
-Deterministic evidence - read-only specialists - same SHA
+00:00:01,800 --> 00:00:05,100
+Should the old exception still count?
 
 3
-00:00:31,000 --> 00:00:51,000
-Mutable coordination view - GitHub is authoritative
+00:00:05,100 --> 00:00:07,200
+Watch: it hasn't expired,
 
 4
-00:00:51,000 --> 00:01:09,000
-Human disposition - eligible, explicit, expiring
+00:00:07,200 --> 00:00:09,500
+but AgentProof marks it stale.
 
 5
-00:01:09,000 --> 00:01:33,000
-Remediation commit - new head SHA
+00:00:10,000 --> 00:00:13,500
+For release leads on teams using Copilot,
 
 6
-00:01:33,000 --> 00:01:51,000
-New SHA - prior evidence and approval stale
+00:00:13,500 --> 00:00:16,000
+fast-moving code raises a question:
 
 7
-00:01:51,000 --> 00:02:12,000
-Fresh same-SHA evidence
+00:00:16,000 --> 00:00:19,500
+does this evidence match what we're
+shipping?
 
 8
-00:02:12,000 --> 00:02:32,000
-Green gate plus independent review
+00:00:19,500 --> 00:00:22,900
+AgentProof brings that evidence and the
+human decision together.
 
 9
-00:02:32,000 --> 00:02:43,000
-Bounded to repository, policy, and SHA
+00:00:23,000 --> 00:00:27,300
+Here's our working prototype on a
+synthetic expense app.
 
 10
-00:02:43,000 --> 00:02:54,000
-Permission canary disabled - UNSAFE_TOOL_BOUNDARY
+00:00:27,300 --> 00:00:31,100
+Test and dependency failures block the
+gate.
+
+11
+00:00:31,100 --> 00:00:34,700
+Missing retention information stays
+unknown.
+
+12
+00:00:34,700 --> 00:00:38,800
+Protected base policy sets the rules, not
+the proposed change.
+
+13
+00:00:39,000 --> 00:00:40,800
+Not another scanner:
+
+14
+00:00:40,800 --> 00:00:43,900
+evidence, policy, and a human decision,
+
+15
+00:00:43,900 --> 00:00:46,000
+bound to the exact commit.
+
+16
+00:00:46,000 --> 00:00:50,100
+This exception names A, a reason, and an
+expiry.
+
+17
+00:00:50,100 --> 00:00:51,800
+It cannot cover B.
+
+18
+00:00:52,000 --> 00:00:54,000
+Fresh checks verify the fixes.
+
+19
+00:00:54,000 --> 00:00:58,000
+A new, authorized exception covers only
+commit B;
+
+20
+00:00:58,000 --> 00:01:00,300
+retention still hasn't passed.
+
+21
+00:01:00,300 --> 00:01:02,300
+The gate turns green.
+
+22
+00:01:02,300 --> 00:01:05,700
+An independent human must still approve
+the code.
+
+23
+00:01:05,700 --> 00:01:08,800
+Green evidence is not permission to merge.
+
+24
+00:01:09,000 --> 00:01:12,500
+This works with GitHub Actions and
+repository rules.
+
+25
+00:01:12,500 --> 00:01:14,300
+Specialist reviewers are advisory;
+
+26
+00:01:14,300 --> 00:01:17,200
+their launches and evidence assembly are
+manual.
+
+27
+00:01:17,200 --> 00:01:20,800
+GitHub records, not the editable board,
+govern the release.
+
+28
+00:01:20,800 --> 00:01:24,800
+We build on GitHub's existing checks and
+reviews.
+
+29
+00:01:25,000 --> 00:01:29,900
+For Microsoft, the opportunity is more
+confident Copilot adoption
+
+30
+00:01:29,900 --> 00:01:32,500
+and less time chasing release evidence.
+
+31
+00:01:32,500 --> 00:01:35,500
+Next, pilot with two engineering teams:
+
+32
+00:01:35,500 --> 00:01:39,800
+compare review effort and verify that
+stale decisions stay blocked.
+
+33
+00:01:39,800 --> 00:01:42,800
+Those are goals, not measured results.
+
+34
+00:01:43,000 --> 00:01:46,000
+Agents can accelerate the work.
+
+35
+00:01:46,500 --> 00:01:49,400
+People still own the decision.
+
+36
+00:01:50,000 --> 00:01:52,600
+AgentProof: the code can change,
+
+37
+00:01:52,600 --> 00:01:55,500
+but trust must be earned again.

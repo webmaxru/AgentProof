@@ -7,23 +7,39 @@ without event-specific positioning or deadlines.
 
 ## Contents
 
-| Path                         | Purpose                                                                                                                  |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `winning-criteria-matrix.md` | Judge-facing mapping from winning criteria to current product evidence, demo proof, and remaining actions.               |
-| `video-recording-guide.md`   | Production plan, privacy controls, capture setup, live-demo procedure, fallback protocol, and post-production checklist. |
-| `video-script.md`            | A time-coded, voiceover-ready script for a 2:54 final cut.                                                               |
-| `recording-checklist.md`     | Printable go/no-go checklist for the presenter and editor.                                                               |
-| `demo/storyboard.md`         | Original shot storyboard and timing budget.                                                                              |
-| `demo/runbook.md`            | Live validation and presenter runbook.                                                                                   |
-| `fallback/README.md`         | Rules for continuity footage and clearly labeled precomputed material.                                                   |
-| `slides/outline.md`          | Three-slide pitch outline and submission quality bar.                                                                    |
-| `assets/`                    | Generated title cards, captions, and draft media.                                                                        |
+| Path                         | Purpose                                                                                                                     |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `winning-criteria-matrix.md` | Judge-facing mapping from winning criteria to current product evidence, demo proof, and remaining actions.                  |
+| `video-recording-guide.md`   | Production plan, privacy controls, recorded-demo procedure, fallback protocol, and post-production checklist.               |
+| `video-script.md`            | Complete 1:56 script: first-ten-second choreography, exact voiceover, source-footage requirements, and honest alternatives. |
+| `video-strategy.md`          | Research-backed editorial choices, source limitations, hook selection, and a claim-to-proof ledger.                         |
+| `recording-checklist.md`     | Printable go/no-go checklist for the presenter and editor.                                                                  |
+| `demo/storyboard.md`         | Eight-scene edit decision list, per-scene word counts, and the 116-second timing budget.                                    |
+| `demo/runbook.md`            | Live validation and presenter runbook.                                                                                      |
+| `fallback/README.md`         | Rules for continuity footage and clearly labeled precomputed material.                                                      |
+| `slides/outline.md`          | Three supporting editorial frames: opening contrast, proposed Microsoft value, and close.                                   |
+| `assets/`                    | Labeled 1:56 silent animatic, full voiceover text/captions, source timeline, local renderer, and shot-log template.         |
+
+## Current video direction
+
+**Opening:** "The code changed. Should the old exception still count?"
+By ten seconds, show an actual exception that has not expired but is stale
+for the new commit. The second payoff is a green evidence gate that still
+requires independent human approval.
+
+The film targets **1:56**, with a hard **2:00** maximum from the project owner.
+Its 234-word narration names release leads using Copilot, demonstrates the
+product, states Microsoft's potential benefit, and proposes a measurable
+pilot. [The matrix](winning-criteria-matrix.md) uses the exact five supplied
+categories: Inspiration, Business Value, Customer Focus, Feasibility, and
+Make Something. No category weights or win guarantee are assumed.
 
 ## Recommended submission framing
 
-This section is the copy-ready submission profile. It follows the current
-Innovation Studio project readiness model: title, tagline, description,
-keywords, one linked executive challenge, and a required demo video.
+This section is a copy-ready draft for title, tagline, description, keywords,
+challenge fit, and media. Confirm the actual fields and event-specific rules
+in authenticated Innovation Studio before submitting. Earlier generic
+platform defaults were not verified requirements for this event.
 
 **Official references:** [Hackathon About
 page](https://innovation-studio.microsoft.com/events/hackathon2026/page/about)
@@ -32,13 +48,13 @@ Challenges](https://innovation-studio.microsoft.com/events/hackathon2026/challen
 
 ### Submission type and challenge
 
-| Field               | Final value                                                                                          |
-| ------------------- | ---------------------------------------------------------------------------------------------------- |
-| Submission type     | **Project**                                                                                          |
-| Executive challenge | **Hack to Make Agents Trustworthy**                                                                  |
-| Challenge selection | Link exactly one executive challenge. Do not dilute the fit by linking several unrelated challenges. |
-| Project maturity    | Working prototype with a live end-to-end demonstration                                               |
-| Data used in demo   | Synthetic expense-approval data only                                                                 |
+| Field               | Recommended value                                                                       |
+| ------------------- | --------------------------------------------------------------------------------------- |
+| Submission type     | **Project**                                                                             |
+| Executive challenge | **Hack to Make Agents Trustworthy**                                                     |
+| Challenge selection | Recommend this primary fit; confirm the event's actual selection and eligibility rules. |
+| Project maturity    | Working prototype; final recorded end-to-end master and voiceover are still pending.    |
+| Data used in demo   | Synthetic expense-approval data only                                                    |
 
 ### Title
 
@@ -52,8 +68,8 @@ Challenges](https://innovation-studio.microsoft.com/events/hackathon2026/challen
 
 AI-assisted development can increase throughput while making release decisions
 harder to defend. Reviewers see code, tests, and agent output, but may not know
-whether the exact commit was evaluated under the intended policy, whether an
-exception was authorized, or whether an old approval survived a new commit.
+whether the exact commit was evaluated under the intended policy or whether
+an exception is still applicable after the code changes.
 
 AgentProof is a model-neutral control loop for trustworthy agentic delivery.
 When a pull request opens, a no-secret GitHub Actions analysis runs
@@ -64,19 +80,20 @@ workflow, policy, artifact, and live head SHA before publishing the
 `AgentProof / gate`, an evidence artifact, and a pull-request summary.
 Unresolved `fail`, `unknown`, and `exception` states block.
 
-After the check, isolated read-only specialist sessions explain the same-SHA
-evidence; they cannot approve, merge, or mutate the repository. A release
-manager may record only an eligible, reasoned, expiring exception. When code
-changes, the new SHA invalidates the old evidence, decision, and approval. A
-distinct human reviewer must still approve before merge.
+After the check, manually launched read-only specialist sessions explain the
+same-SHA evidence; they do not approve, merge, or remediate. Unsafe tool
+boundaries must stop the session. A release manager may record only an
+eligible, reasoned, expiring exception. Prior-SHA evidence and dispositions
+do not apply to a new head; configured GitHub rules separately dismiss stale
+approvals and require independent human review.
 
 The result is not a chatbot and not a claim of universal compliance or
-authorship. It is a practical, GitHub-native safety boundary that lets
-organizations adopt AI-assisted engineering without removing human
-accountability. The demo uses synthetic data and shows a red-to-green path:
-unsafe pull request, evidence, bounded decision, remediation, stale-SHA
-rejection, fresh evidence, independent approval, and a disabled automation
-canary when unsafe mutation tools remain visible.
+authorship. It is a GitHub-native control intended to support AI-assisted
+engineering without removing human accountability. The planned video uses a
+synthetic expense app: an unexpired exception becomes stale after a commit
+change, fresh evidence and a new human decision satisfy the current gate,
+and independent review remains required. Product footage and voiceover still
+need recording. The unsafe-tool-boundary canary remains disabled.
 
 ### Keywords
 
@@ -87,24 +104,24 @@ canary when unsafe mutation tools remain visible.
 AgentProof directly addresses **Hack to Make Agents Trustworthy**. The
 trustworthiness problem is operational: an organization needs to know whether
 the exact AI-assisted change being released was evaluated, whether the
-evidence is current, whether a human decision is authorized and bounded, and
-whether an approval survived subsequent changes. AgentProof makes those
-questions visible and enforceable without pretending to determine authorship or
-make a legal or compliance decision.
+evidence is current, and whether a human decision is authorized and bounded.
+AgentProof connects those questions to policy and repository enforcement,
+building on GitHub's existing commit checks and review rules. It does not
+determine authorship or make a legal or compliance decision.
 
 The strongest challenge proof is the new-SHA transition. A remediation commit
-does not inherit the old evidence, exception, or approval. The release must
-earn a fresh decision, and an independent human remains accountable.
+does not inherit an old SHA-bound disposition. Current evidence is required,
+and configured GitHub rules preserve the independent human-review boundary.
 
 ### Audience and user value
 
-**Primary users:** engineering teams, release managers, repository
-administrators, security and policy reviewers, and organizations adopting
-AI-assisted development.
+**Primary users:** release leads and reviewers on engineering teams using
+GitHub and Copilot. Repository administrators and policy owners are supporting
+stakeholders, not a substitute for naming the main user.
 
-**User pain:** manual review is slow, evidence is scattered, old approvals can
-be mistaken for current approval, and agent automation can expose more
-capability than its configuration suggests.
+**User problem to validate:** evidence and decisions can be scattered, leaving
+release leads to check whether they apply to the current code. Review effort
+and customer demand have not yet been measured for this prototype.
 
 **User outcome:** a release manager gets one current, commit-bound decision
 surface; reviewers get bounded evidence; repository owners get a fail-closed
@@ -118,7 +135,7 @@ control that works with existing GitHub rules.
   evaluate itself.
 - **Distinct evidence states:** `pass`, `fail`, `unknown`, and `exception` are
   preserved instead of hiding uncertainty behind a green result.
-- **Human accountability without human busywork:** specialist agents explain
+- **Human accountability with advisory context:** specialist agents explain
   evidence, but they cannot approve, merge, or override the deterministic gate.
 - **Fail-closed host boundary:** the permission canary stops when hidden
   mutation capability remains visible, rather than presenting an unsafe
@@ -153,8 +170,11 @@ report the actual values in the final submission notes:
 | Stale-decision rejection  | Unauthorized or stale SHA-bound decisions rejected by the system.                                |
 | Governed merge rate       | Merges with current evidence and independent approval.                                           |
 
-The intended business outcome is safer adoption of AI-assisted engineering
-with less release-manager toil and fewer stale or untraceable decisions.
+The Microsoft business hypothesis is more confident adoption of GitHub and
+Copilot workflows with less evidence chasing. No revenue, adoption, retention,
+satisfaction, or time-saving result is claimed. The
+[five-category matrix](winning-criteria-matrix.md) specifies a proposed
+two-team pilot and measurements.
 
 ### Trust, safety, and limitations
 
@@ -164,29 +184,34 @@ with less release-manager toil and fewer stale or untraceable decisions.
 - Reviewer sessions are advisory and manually started in the supported MVP.
 - Exceptions are eligibility-checked, authorized, reasoned, expiring, and
   bound to the current SHA.
-- A new commit invalidates previous evidence, dispositions, and stale
-  approvals.
+- Prior-SHA evidence and dispositions do not apply to a new head; configured
+  GitHub rules separately handle stale approvals.
 - The system does not prove universal authorship, model provenance, legal
   compliance, security, privacy, or production suitability.
 - The canvas is mutable and cannot replace GitHub's authoritative records.
 
-### Required demo video
+### Demo video package
 
 **Recommended upload name:** `agentproof-trustworthy-agentic-delivery.mp4`
 
-**Required story:** unsafe pull request -> red gate -> same-SHA evidence ->
-bounded human disposition -> remediation -> stale-SHA invalidation -> fresh
-evidence -> green gate -> independent approval -> disabled unsafe-automation
-canary.
+**Planned story:** unexpired exception -> new commit -> stale result within
+ten seconds -> named customer -> working evidence and protected policy ->
+fresh B evidence and genuine B decision -> green gate but human approval still
+required -> feasible integration -> proposed Microsoft value/pilot ->
+accountability close.
 
 **Current checked-in asset:** `assets/agentproof-silent-draft.mp4`. It is a
-1920x1080, 30 fps, 174-second silent timing draft with a persistent
-`PRECOMPUTED / NOT LIVE` banner. It is not the final live proof and must be
-replaced with the live GitHub/App capture plus voiceover before upload.
+1920x1080, 30 fps, **116-second silent storyboard** with a persistent
+`PRECOMPUTED / NOT LIVE` banner. It is not the final product demonstration.
+The separate master needs actual GitHub/App footage and the presenter's
+voiceover. Complete 234-word narration, rehearsal captions, and the source
+timeline are in `assets/`.
 
-**Current platform media constraints:** MP4, MOV, AVI, MKV, or WebM; maximum
-100 MB; maximum 5 minutes. The planned final cut is 2:54 to leave editing
-margin. The complete recording procedure is in
+**Duration:** target 1:56; hard maximum 2:00 from the project owner. Confirm
+the actual upload container, size, caption, and accessibility rules in the
+authenticated event form. Earlier five-minute/100 MB statements were not
+verified event-specific requirements and must not be relied on.
+The complete recording procedure is in
 [video-recording-guide.md](video-recording-guide.md), and the voiceover is in
 [video-script.md](video-script.md).
 
@@ -201,36 +226,36 @@ submission:
 | Open to new team members | **No** for the final polished submission unless active recruitment is genuinely needed.                                                    |
 | Open to invitations      | **No** after the demo story and ownership are stable.                                                                                      |
 | Participation mode       | Select the actual mode used by the team; do not claim an in-person venue or partner participation that did not occur.                      |
-| Challenge links          | One executive challenge: **Hack to Make Agents Trustworthy**.                                                                              |
+| Challenge links          | Recommended primary fit: **Hack to Make Agents Trustworthy**; verify current event selection rules.                                        |
 | Project visibility       | Use the visibility required by the event, but do not expose private repositories, tenant links, or personal notifications in media.        |
-| Media                    | Upload the final live demo video and one or two clean architecture/product stills only after privacy review.                               |
+| Media                    | Upload the final recorded product video and any required stills only after privacy and event-rule review.                                  |
 
 ### Final submission checklist
 
-- [ ] Title, tagline, and description are pasted exactly from this packet.
+- [ ] Title, tagline, and description match the actual final product/recording status.
 - [ ] Keywords are entered as searchable terms, not a paragraph.
-- [ ] Exactly one executive challenge is linked.
-- [ ] The live demo video replaces the silent draft and contains voiceover and
+- [ ] Challenge fit and selection follow the actual current event rules.
+- [ ] A separate recorded-product master replaces cue-card placeholders and contains voiceover and
       captions.
-- [ ] The video is under 100 MB and under 5 minutes.
+- [ ] The exported master is at most 120 seconds and meets separately verified upload rules.
 - [ ] The unsafe and remediated full SHAs are visible and different.
 - [ ] The final artifact digest and green gate match the final SHA.
-- [ ] The independent reviewer is distinct from the author and release
-      decision-maker.
+- [ ] The actual independent-review requirement is shown; any claimed approval
+      is a genuine independent human record.
 - [ ] Baseline/trial metrics are actual observations, not targets.
 - [ ] No secrets, customer data, tenant links, account details, or
       notifications appear.
 - [ ] The final claims remain bounded to the repository, policy, and SHA.
 
-The strongest proof is a live red-to-green release decision:
+The strongest proof is a recorded, genuine release-evidence sequence:
 
 1. An unsafe pull request fails on the current head SHA.
 2. Deterministic collectors produce bounded findings without secrets.
-3. Read-only specialist sessions explain the same-SHA evidence.
-4. A release manager records a bounded, expiring decision only where policy
-   allows it.
-5. Remediation creates a new SHA and invalidates the old evidence.
-6. Fresh evidence and an independent approval make merge available.
+3. A human records a bounded, expiring A decision only where policy allows it.
+4. Real remediation creates head B and requires fresh evidence.
+5. A's exception remains unexpired but is stale and ineffective for B.
+6. Fresh evidence and a new authorized decision can satisfy B's gate, but
+   independent human review is still required.
 
 The packet never presents the mutable Evidence Board as an immutable audit
 record. GitHub commits, checks, comments, reviews, rules, and artifacts remain
@@ -240,8 +265,10 @@ the authoritative record.
 
 The checked-in MP4 in `assets/` is a **silent precomputed draft** with
 on-screen `PRECOMPUTED / NOT LIVE` labels. It is a timing and voiceover aid,
-not the final proof. Replace its cue cards with the live GitHub/App capture
-described in `video-recording-guide.md` before submitting.
+not the final proof. Capture the genuine GitHub/App shots described in
+`video-recording-guide.md`, add voiceover, and export a separately named
+master before submitting. No completed source-shot log or voiced master is
+claimed by this packet.
 
 No file in this folder should contain secrets, customer data, tenant links,
 personal notifications, or unredacted account identifiers.

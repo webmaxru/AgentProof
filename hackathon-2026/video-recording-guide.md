@@ -1,254 +1,201 @@
-# Video recording guide
+# Recording guide: a 1:56 AgentProof story
 
-This guide prepares a polished, voiceover-ready product video for AgentProof.
-It assumes that the presenter will capture the live GitHub/App sequence first
-and add narration later. The recording is designed to prove a trustworthy
-agentic-delivery control loop, not to present a compliance certification or
-claim universal model provenance.
+Produce a **recorded demonstration with later voiceover**, not a purported
+two-minute live execution of CI and human review. The project owner's hard
+ceiling is **2:00**; picture lock is **1:56**, including the ending.
 
-## 1. Final deliverable
+Use [the script](video-script.md) for exact words and detailed shots,
+[the storyboard](demo/storyboard.md) for the edit list, and
+[the runbook](demo/runbook.md) for evidence prerequisites. The checked-in
+silent MP4 is a labeled storyboard only; it is not a product recording.
 
-Produce one 16:9 video with a maximum runtime of **2 minutes 54 seconds**.
-Use the following deliverables while editing:
+## 1. What to deliver
 
-| Deliverable                    | Required    | Description                                                                         |
-| ------------------------------ | ----------- | ----------------------------------------------------------------------------------- |
-| `agentproof-live-master.mp4`   | Yes         | Final video with live GitHub/App footage and voiceover.                             |
-| `agentproof-live-master.srt`   | Recommended | Human-readable captions matching the final narration.                               |
-| `agentproof-silent-draft.mp4`  | Optional    | Timing/reference draft. It must remain labeled as precomputed and not live.         |
-| `agentproof-shot-log.md`       | Recommended | Actual takes, source URLs, SHAs, and any continuity substitutions.                  |
-| `agentproof-privacy-review.md` | Recommended | Confirmation that no secrets, customer data, tenant links, or personal UI appeared. |
+| Deliverable                          | Purpose and status                                                                  |
+| ------------------------------------ | ----------------------------------------------------------------------------------- |
+| `agentproof-recorded-master.mp4`     | Final real-product cut with the presenter's voiceover; **not yet captured**.        |
+| `agentproof-recorded-master.srt`     | Full narration, retimed against the final recorded voice.                           |
+| Completed sanitized shot log         | Records which real source supports each claim and whether a substitution was used.  |
+| Privacy review                       | Confirms the actual export contains no prohibited information or personal UI.       |
+| `assets/agentproof-silent-draft.mp4` | Existing 116-second precomputed rehearsal aid; **not a substitute for the master**. |
+| `assets/agentproof-voiceover.txt`    | Clean 234-word voice track, ready for the presenter to read.                        |
 
-The final master must not imply that the silent draft is live evidence. If a
-fallback clip or fixture is used, keep `PRECOMPUTED / NOT LIVE` on screen for
-the entire fallback segment and state the substitution in the shot log.
+Do not overwrite the labeled animatic with an unlabeled master. Retain clear
+filenames and provenance. Keep raw desktop footage and non-shareable source
+records only in approved local/internal storage, never in this packet.
 
-## 2. The story the video must prove
+## 2. Prepare one coherent evidence story
 
-The audience should understand five things without reading the repository:
+Use one disposable **synthetic** PR, two different real full head SHAs, and
+the protected base policy. Nothing in this guide authorizes an agent to make
+an exception decision, approve a PR, merge, or release.
 
-1. AI-assisted changes can be productive but are not automatically trusted.
-2. AgentProof evaluates the exact pull-request head SHA with deterministic,
-   no-secret evidence.
-3. Human specialists add context but cannot override the deterministic gate.
-4. A human disposition is bounded by policy and the SHA that was evaluated.
-5. A new commit invalidates old evidence; only fresh evidence and independent
-   approval make merge available.
+| Source                        | State that must genuinely exist                                                                                                       | Why it is needed                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| A: before fixes               | Real non-exceptionable test/dependency failures; raw retention evidence is `unknown`.                                                 | Shows collectors, not a static product concept.                                   |
+| A: human decision             | An authorized human independently chose an eligible retention exception, with full A SHA, specific rationale, and a permitted expiry. | Provides the actual bounded decision for the hook. A's whole gate can remain red. |
+| B: fixes and stale A decision | Real remediation creates B. Fresh collection shows fixed findings passing; the old A exception is unexpired but `stale` for B.        | Proves commit mismatch, not merely elapsed time.                                  |
+| B: new human decision         | If genuinely justified, the authorized human makes a separate B-bound retention decision. Final finding remains `exception`.          | Allows the truthful green-gate sequence without pretending retention passed.      |
+| B: current authority          | Check, artifact, policy identity, and live PR head agree; configured GitHub rules still require independent approval.                 | Proves the distinction between evidence success and human approval.               |
 
-The key sentence to build toward is:
+If the records do not exist, **capture is not ready**. Either the authorized
+people perform genuine work in the synthetic scenario, or use the explicitly
+labeled alternative script in [video-script.md](video-script.md). Do not
+simulate human comments, spoof identities, or manufacture GitHub screenshots.
 
-> The hard problem is not who typed the code. It is whether this exact change
-> earned evidence and an accountable decision.
+Do not seek an unnecessary exception in a real customer repository just for
+the film. A narrow synthetic exercise is sufficient.
 
-## 3. Prepare the repository and live state
+## 3. Prepare the working surfaces
 
-Complete these steps before opening the recorder:
+You need six logical surfaces, not a thirteen-tab feature tour:
 
-1. Start from a clean, known branch and record the exact commit IDs in a
-   presenter-only note. Do not put private links or credentials in the video
-   folder.
-2. Use the synthetic repository and synthetic expense data only.
-3. Prepare an unsafe pull request that produces the intended dependency,
-   authorization-test, and retention findings.
-4. Prepare the real remediation commit that fixes the dependency and restores
-   the authorization-test marker while leaving the intentionally bounded
-   retention scenario available for the human-disposition step.
-5. Wait for the deterministic analysis and publish workflows to finish for the
-   unsafe head SHA before starting specialist sessions.
-6. Start the Test Reviewer, Security Reviewer, and Policy Reviewer manually in
-   isolated read-only sessions. Review the tool confirmation each time.
-7. If the host exposes a mutation-capable built-in or cross-repository access,
-   stop and show the fail-closed `UNSAFE_TOOL_BOUNDARY` result later. Do not
-   continue with that automation.
-8. Run the Evidence Assembler manually after all three specialist fragments
-   refer to the same repository, PR, base SHA, policy digest, and head SHA.
-9. Prepare the exact authorized exception command, but do not submit it until
-   the live finding ID, SHA, reason, and expiry are visible.
-10. Prepare an independent reviewer account or profile. The author or release
-    decision-maker must not approve the pull request.
+1. A's exception record and completed evidence, with the raw unknown snapshot.
+2. B's actual commit/diff and the stale A disposition in completed B evidence.
+3. B's fresh evidence and genuine B-bound human disposition.
+4. The current GitHub check, artifact, and PR review requirement.
+5. The actual rules plus an optional safe manual reviewer/assembler surface.
+6. The two editorial value/closing frames in [slides/outline.md](slides/outline.md).
 
-## 4. Privacy and recording controls
+The Evidence Board is useful but optional footage. If shown, load the right
+document and retain its mutable-coordination/GitHub-authority warning.
+All reviewer launches and evidence assembly are manual. Inspect their
+actual tool grants first; do not launch a mutation-capable reviewer to obtain
+video. The permission-canary automation remains disabled.
 
-### Browser profile
+Keep a private approved evidence reference outside the submission tree.
+The shareable shot log contains only synthetic SHAs, sanitized record labels,
+capture time/expiry, and non-sensitive descriptions, not private URLs or
+private source data.
 
-- Use a clean browser profile or a dedicated browser window.
-- Hide bookmarks, extensions, account avatars, unread counts, messaging
-  overlays, notifications, tenant names, and unrelated tabs.
-- Keep only the GitHub PR, check/artifact pages, reviewer sessions, Evidence
-  Board, and the sanitized repository view.
-- Do not record a password manager, credential prompt, authentication dialog,
-  email, chat, calendar, customer name, customer URL, or private source tree.
+## 4. Set up a clean capture
 
-### Repository and data
+**Picture:** 1920x1080, 16:9, 30 fps. Use the same theme throughout. Capture an
+approved application/window region rather than the entire desktop. Increase
+zoom until state labels and the full SHA remain readable in a 1280x720 preview.
 
-- Use synthetic identities and the synthetic expense repository.
-- Redact repository owners if the live repository is private.
-- Keep full SHAs visible where they prove binding, but never show tokens,
-  secrets, environment variables, customer identifiers, or tenant links.
-- Never paste a real exception rationale or real customer data into a PR.
-- Do not describe scanner output as a legal, privacy, security, or compliance
-  determination.
+**Composition:** leave about 80 px safe margin in the 1080p master. Keep a
+caption-safe band near the bottom; move a caption if it would cover the SHA,
+expiry, or result. Use roughly 40-48 px captions and 48-64 px editorial
+headings. These are editing recommendations, not event requirements.
 
-### Capture settings
+**Privacy:** hide unrelated tabs, notifications, bookmarks, avatars, email,
+chat, calendar, tenant identifiers, customer data, tokens, terminals with
+environment variables, and authentication dialogs. Do not capture them and
+assume later blur will make the raw recording safe to share.
 
-- Resolution: 1920x1080 if the source window supports it; otherwise 1280x720.
-- Frame rate: 30 fps.
-- Cursor: visible, medium size, with a subtle highlight if available.
-- Browser zoom: 100–110%; increase only until the full SHA, finding state, and
-  check name are readable.
-- Audio: record scratch audio if helpful, but plan to replace it with the final
-  voiceover.
-- Notifications: disable Windows, Teams, Outlook, GitHub, and browser
-  notifications for the recording session.
-- Use a single consistent dark/light theme; do not switch themes mid-take.
+**Cursor:** move deliberately, point once, and park it outside the result.
+Avoid circles, repeated selections, and noisy click highlights.
 
-## 5. Window and tab preparation
+**Sound:** capture clean room audio for voiceover later; turn off UI sounds.
+No music is required. If music is used, it must be authorized and remain well
+below the voice. Do not spend the first seconds on a sound-logo.
 
-Open the following in storyboard order and rename tabs if the browser permits:
+## 5. Record source takes, not a fragile single performance
 
-1. Unsafe pull request overview.
-2. Unsafe `AgentProof / gate` check and artifact.
-3. Test Reviewer result.
-4. Security Reviewer result.
-5. Policy Reviewer result.
-6. Evidence Board with the unsafe evidence loaded.
-7. PR comment box with the exception skeleton ready but not submitted.
-8. Remediation diff/session.
-9. New head SHA and stale-disposition view.
-10. Fresh evidence and new exception draft.
-11. Final green gate and final artifact digest.
-12. Independent reviewer approval view.
-13. Disabled permission-canary result and the project limitations.
+Record 3-5 seconds of handles before and after each useful state. Workflow
+waiting happens outside the final edit; the film must disclose that waits
+are omitted.
 
-Before recording, click through the sequence once without recording. Close any
-tab that reveals an account, notification, or unrelated repository.
+| Take                     | Capture                                                                                                             | Avoid                                                                                              |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| **H1: hook**             | A decision fields; B head; actual B `stale` result; future A expiry with capture timestamp recorded in the log.     | A green gate invented for A; a record that had already expired; mixing unrelated PRs.              |
+| **P1: product proof**    | A raw/final findings; failure gate; protected base-policy identity; B fixes and fresh passing findings.             | Showing projected `exception` while saying the same final finding is `unknown`.                    |
+| **H2: human boundary**   | Genuine B decision, distinct `exception` state, green B gate, remaining independent-review requirement.             | Clicking approval or merge for a take; a fake green check; narration that says retention passed.   |
+| **F1: feasibility**      | Actual rules/configuration, completed Actions publication, optional read-only entry point, board authority warning. | Presenting checked-in configuration as already deployed; pretending manual sessions are automatic. |
+| **V1: value and ending** | Clearly editorial proposed-pilot card, then real B evidence/human boundary and the closing title.                   | Fabricated customer logos, saved-hours charts, research counts, or production badges.              |
 
-## 6. Live recording procedure
+The human actions should be completed by the relevant humans on their own
+merits. Capture the resulting records; do not film a staged "agent approves"
+or ask an agent to submit the disposition.
 
-Use `video-script.md` as the authoritative timing sheet. The following
-procedure is the operational version:
+If a new push changes B during recording, stop. That is a new head, not the
+one in the script. Recollect and revalidate; never edit around the mismatch.
 
-### Take A — unsafe head
+## 6. Assemble the first ten seconds first
 
-1. Begin on the unsafe PR, not on a title slide.
-2. Pause long enough to read the origin declaration and full head SHA.
-3. Open the red `AgentProof / gate`.
-4. Show the evidence artifact and match its repository, PR number, policy
-   digest, and head SHA.
-5. Show the three isolated specialist results. Each result must display or
-   clearly identify the same head SHA.
-6. Open the Evidence Board and point out the mutable-coordination banner.
-7. Draft the retention exception in the PR comment box.
-8. Submit only the authorized, eligible, current-SHA exception.
+Make this mini-cut before polishing the rest:
 
-### Take B — remediation and invalidation
+1. Real A exception, then real B head.
+2. Ask whether the old exception still counts.
+3. Establish the expiry has not arrived at capture.
+4. Show the actual stale disposition by about 0:08.
+5. Hold, then name the release lead.
 
-1. Switch to the prepared remediation view.
-2. Show the dependency fix and authorization-test marker restoration.
-3. Push the real remediation commit.
-4. Return to the pull request and wait for the new head SHA to appear.
-5. Show the old disposition/evidence becoming stale or ineffective.
-6. Show that the old approval does not satisfy the new revision.
+Show it to a person unfamiliar with the project. Ask them what changed and
+why the exception no longer applies. If they only remember a red badge,
+enlarge the A/B binding and simplify the overlay. Do not add more jargon.
 
-### Take C — fresh evidence and independent review
+Do not call this an experimentally validated attention test. It is a
+qualitative clarity check.
 
-1. Open the fresh deterministic result for the new head SHA.
-2. Start fresh read-only specialist sessions if their notes are shown.
-3. Assemble only same-SHA fragments.
-4. Record a new retention exception if it is still required.
-5. Show the final green gate and matching artifact digest.
-6. Switch to the distinct reviewer profile and approve the pull request.
-7. Show merge becoming available, but do not merge.
+## 7. Voiceover session
 
-### Take D — boundary and limitation
+Read [the clean voiceover](assets/agentproof-voiceover.txt) in eight takes.
+Record lossless audio, preferably 48 kHz, with a consistent mic distance and
+quiet room. Make one natural take and one slightly more deliberate take.
 
-1. Show the disabled permission canary.
-2. Keep the `UNSAFE_TOOL_BOUNDARY` result visible.
-3. Show the limits slide or README excerpt:
-   - manual reviewer sessions;
-   - manual assembly;
-   - mutable canvas;
-   - bounded evidence rather than universal provenance or compliance;
-   - no automatic approval or merge.
+The script has 234 words. Allow the planned visual holds; individual scenes
+average about 97-135 words/minute. A real read-through is still required:
+word counts do not guarantee the presenter's timing.
 
-## 7. Voiceover and pacing
+- Hook: curious and calm. Stress "still" and "hasn't expired."
+- Customer: speak to a release lead, not a general AI audience.
+- Proof: stress `unknown`, `exact commit`, and `cannot cover B`.
+- Human boundary: pause after "green"; emphasize "not permission to merge."
+- Value: explicitly say "opportunity," "pilot," and "not measured results."
+- Ending: slow down rather than raising the volume.
 
-Record narration after the picture lock. Use a conversational pace of roughly
-130–150 words per minute. Leave at least 0.5 seconds of silence around
-transitions and 1.0 second when a full SHA, finding state, or evidence digest
-must be read visually.
+Use the storyboard's timings as the edit budget, not a metronome that forces
+unnatural speech. If a take runs long, trim redundant words and update the
+script/timeline/captions together. Never remove a truth qualifier to save time.
 
-The narration should:
+## 8. Edit and caption
 
-- state the problem before naming implementation details;
-- explain why the exact SHA matters;
-- distinguish deterministic evidence from advisory agent prose;
-- call out the human decision and independent approval;
-- describe the failed permission canary as a deliberate stop;
-- avoid claims such as “compliant,” “secure,” “verified author,” “immutable,”
-  “automatic approval,” or “live reviewer automation.”
+Use hard cuts and restrained zooms. One focus per shot; never ask the audience
+to read a whole JSON file while listening to unrelated narration.
 
-The full voiceover text is in `video-script.md`. It is intentionally written as
-short sentences so it can be recorded in separate takes and edited cleanly.
+Keep `Recorded synthetic scenario | workflow waits omitted` visible on
+product footage. Label A and B consistently. Full SHAs remain in the
+underlying evidence even when the editorial label uses a single letter.
 
-## 8. Editing recipe
+The supplied SRT contains **all spoken words**, with rehearsal timing. Retime
+it to the actual voice; do not submit captions that anticipate or trail the
+speech. Use at most two lines, good contrast, and position them clear of
+evidence fields.
 
-1. Put the live unsafe PR at the first frame.
-2. Cut on UI transitions, not on narration breaths.
-3. Use hard cuts or short 150–250 ms dissolves; avoid decorative transitions.
-4. Add a small lower-third only when a new concept appears:
-   - `CURRENT HEAD SHA`
-   - `DETERMINISTIC EVIDENCE`
-   - `HUMAN DISPOSITION`
-   - `NEW SHA — PRIOR DECISION STALE`
-   - `INDEPENDENT REVIEW`
-5. Add captions for every spoken sentence.
-6. Keep the SHA and check name at least 32 px high in the 1080p master.
-7. Blur or crop private UI before adding any zoom.
-8. If a live page loads slowly, cut to the already completed live check rather
-   than inserting the synthetic fixture.
-9. If a fallback is unavoidable, add the persistent
-   `PRECOMPUTED / NOT LIVE` banner before the first fallback frame.
-10. End on the disabled-canary limitation, not on a claim of automatic safety.
+Editorial overlays must look editorial: use an outline, callout, or lower-third.
+Never paint over a real status to change its meaning. If an earlier run or
+fixture is substituted, follow [the fallback rules](fallback/README.md) and
+keep its `PRECOMPUTED / NOT LIVE` label visible throughout.
 
-## 9. Post-production verification
+For the value card, use `PROPOSED PILOT` and `Not yet measured`. For the close,
+return to evidence and human accountability. The disabled canary belongs in
+the supporting limitations, not a last-second feature or failure tour.
 
-Run these checks before sharing the draft:
+## 9. Export and verify the actual file
 
-- Runtime is no longer than 2:54.
-- The unsafe and remediated SHAs are different and each visible evidence result
-  matches the correct one.
-- Every specialist result is same-SHA or omitted.
-- The exception names the live finding ID and current SHA.
-- The final artifact digest matches the displayed final evidence.
-- The independent reviewer is distinct from the author and release
-  decision-maker.
-- No notifications, account details, secrets, customer data, tenant links, or
-  unrelated repositories appear.
-- The silent draft is labeled precomputed and is not being submitted as live
-  proof.
-- The final voiceover does not turn bounded evidence into a legal or compliance
-  conclusion.
+Recommended master: MP4 with H.264 video, yuv420p, constant 30 fps, fast-start,
+and AAC voice audio. Target 116 seconds. Check the authenticated upload form
+for its current container, size, caption, and accessibility requirements;
+do not rely on the earlier unverified five-minute/100 MB assumptions.
 
-## 10. Required shot log
+On Windows, inspect the exported file:
 
-Create `assets/agentproof-shot-log.md` after the final take and record:
-
-```text
-take:
-unsafe_head_sha:
-remediated_head_sha:
-pr_number:
-final_artifact_digest:
-workflow_run_urls:
-reviewer_session_labels:
-exception_finding_id:
-exception_expiry:
-independent_reviewer:
-fallback_segments:
-privacy_reviewed_by:
-reviewed_at:
+```powershell
+ffprobe -v error -show_entries format=duration,size:stream=codec_name,codec_type,width,height,r_frame_rate -of json '.\agentproof-recorded-master.mp4'
 ```
 
-Keep the shot log free of tokens, customer data, tenant links, and private
-evidence that is not required to reproduce the recording.
+Reject an export over **120 seconds**, including any encoder-added tail.
+Watch the actual exported file end to end with sound, then preview at 720p.
+Check the first ten seconds, every source transition, SHA/expiry readability,
+audio intelligibility, captions, privacy, and final frame. Do not validate
+only the editing timeline or the silent rehearsal video.
+
+## 10. Sign off honestly
+
+Complete [the checklist](recording-checklist.md) and the
+[sanitized shot log](assets/agentproof-shot-log.template.md).
+If the master or voiceover is not recorded, state that plainly. If the
+business pilot has not happened, retain the hypothesis language. No clip,
+badge, or script can make an unmeasured outcome real.

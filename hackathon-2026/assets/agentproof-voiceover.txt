@@ -1,0 +1,15 @@
+The code changed. Should the old exception still count? Watch: it hasn't expired, but AgentProof marks it stale.
+
+For release leads on teams using Copilot, fast-moving code raises a question: does this evidence match what we're shipping? AgentProof brings that evidence and the human decision together.
+
+Here's our working prototype on a synthetic expense app. Test and dependency failures block the gate. Missing retention information stays unknown. Protected base policy sets the rules, not the proposed change.
+
+Not another scanner: evidence, policy, and a human decision, bound to the exact commit. This exception names A, a reason, and an expiry. It cannot cover B.
+
+Fresh checks verify the fixes. A new, authorized exception covers only commit B; retention still hasn't passed. The gate turns green. An independent human must still approve the code. Green evidence is not permission to merge.
+
+This works with GitHub Actions and repository rules. Specialist reviewers are advisory; their launches and evidence assembly are manual. GitHub records, not the editable board, govern the release. We build on GitHub's existing checks and reviews.
+
+For Microsoft, the opportunity is more confident Copilot adoption and less time chasing release evidence. Next, pilot with two engineering teams: compare review effort and verify that stale decisions stay blocked. Those are goals, not measured results.
+
+Agents can accelerate the work. People still own the decision. AgentProof: the code can change, but trust must be earned again.

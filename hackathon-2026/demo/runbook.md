@@ -1,174 +1,130 @@
-# AgentProof demo runbook
+# AgentProof two-minute recording runbook
 
-## Truth rule
+## Scope and truth rule
 
-Show live GitHub/App state whenever available. A completed real check may be
-opened after it ran; that is still a real record. If any screenshot, clip, or
-fixture substitutes for live state, display **PRECOMPUTED / NOT LIVE** for its
-entire use and say so. Never present `../../demo/synthetic-findings.json` as scanner
-output.
+This runbook prepares the source records for the
+[1:56 film](../video-script.md). It does not authorize exception acceptance,
+approval, merge, release, or permission changes by an agent.
 
-## Hackathon 2026 submission preflight
+Use actual GitHub records from one synthetic scenario. A completed check
+remains genuine evidence when recorded after it ran, but do not call the
+edited film a continuous live execution. Any substituted earlier run or
+fixture follows [the fallback rules](../fallback/README.md).
 
-The recommended executive challenge is [Hack to Make Agents
-Trustworthy](https://innovation-studio.microsoft.com/events/hackathon2026/challenges/executive-challenges).
-The recording must prove the product thesis, not merely describe the
-architecture:
+Keep all event preparation here, not in the product README.
 
-- Start with the unsafe PR and end with fresh same-SHA evidence plus
-  independent approval.
-- Show the full head SHA, deterministic `AgentProof / gate`, evidence digest,
-  bounded disposition, remediation commit, and stale-SHA invalidation.
-- Record measured baseline-versus-trial outcomes; never substitute targets for
-  results.
-- Replace every placeholder and remove account details, notifications,
-  customer data, tenant links, secrets, and unrelated browser content.
-- Keep the permission canary disabled and describe `UNSAFE_TOOL_BOUNDARY` as a
-  deliberate fail-closed result.
-- Keep the complete sequence within the existing 2:54 storyboard and verify
-  the final upload deadline in Innovation Studio before submission.
+## Evidence prerequisites
 
-## Required placeholders
+Record non-sensitive references in the
+[shot-log template](../assets/agentproof-shot-log.template.md). Keep private
+source records in approved storage, not in prompts, fixtures, or this log.
 
-- Repository: `<OWNER>/<REPO>`
-- Unsafe PR: `<PR_URL>`
-- Unsafe head: `<UNSAFE_40_CHAR_SHA>`
-- Remediated head: `<REMEDIATED_40_CHAR_SHA>`
-- Release manager: `<RELEASE_MANAGER_LOGIN>`
-- Independent reviewer: `<INDEPENDENT_REVIEWER_LOGIN>`
-- Expiry (within base-policy maximum): `<YYYY-MM-DD>`
-- Session/deep links: `<TEST>`, `<SECURITY>`, `<POLICY>`, `<ASSEMBLER>`,
-  `<REMEDIATION>`
+| Item           | Required fact                                                                                                                |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Scenario       | One disposable synthetic PR; no customer data or tenant links.                                                               |
+| Head A         | Real full 40-character PR head SHA before remediation.                                                                       |
+| A evidence     | Actual intended test/dependency failures and raw retention unknown; protected base-policy identity.                          |
+| A disposition  | Genuine authorized human exception, eligible under that base policy, with A SHA, rationale, and permitted expiry.            |
+| Head B         | Real different full SHA after the relevant fixes; same PR.                                                                   |
+| B stale case   | Fresh B evidence contains the old A disposition as `stale`, not expired; retention unresolved.                               |
+| B final case   | Separate genuine authorized human B decision if justified; final retention state `exception`; current evidence gate success. |
+| Human boundary | Actual configured GitHub independent-review requirement, still pending for the default script.                               |
 
-Reviewer sessions and the Evidence Assembler are manual. Installed-agent and
-deep-link launches require the presenter to review and confirm; open all needed
-tabs in advance rather than implying that a link silently creates a session or
-automation.
+The policy from the **protected base revision** is authoritative. Do not
+change it in the demo branch to permit a more convenient exception.
+The base policy used during preparation makes test and dependency failures
+non-exceptionable; reverify the selected protected base before capture.
 
-## Validated live baseline
+The exception fields to inspect, **not an instruction for an agent to submit**:
 
-On 2026-09-02, PR-triggered `AgentProof Analysis` and `AgentProof Publish`
-succeeded in the private live repository and produced the full-SHA-bound
-`AgentProof / gate`, artifact, and PR summary. The plugin installed from
-`msft-common-demos/AgentProof:plugin`.
+```text
+/agentproof accept-exception AP-POL-RETENTION-001
+sha: <ACTUAL_FULL_HEAD_SHA>
+reason: <THE_AUTHORIZED_HUMAN'S_SPECIFIC_JUSTIFICATION>
+expires: <ELIGIBLE_DATE_WITHIN_PROTECTED_POLICY>
+```
 
-On 2026-09-03, the private automation lab exposed all three repository reviewer
-profiles after project selection, and a disposable candidate fired on PR opened
-and synchronized. After the picker was reduced from 50 tools to 21 read-only
-operations, the runtime still reported `functions.apply_patch`,
-`functions.bash`, and broader Actions access. It returned
-`UNSAFE_TOOL_BOUNDARY`, made no automation mutation, and was disabled. Do not
-narrate three personal reviewer automations; the working sequence uses three
-isolated, manually started, read-only sessions.
+Never use an expired record to claim the opening proves SHA mismatch. Never
+copy the A command to B as though the original human decision automatically
+applies.
 
-## T-24 hours
+## Preparation: before the recording day
 
-1. Run `npm ci` and `npm run check`.
-2. Verify the selected vulnerable dependency still produces the expected real
-   normalized advisory; if advisory service behavior changed, repair the demo
-   before recording rather than relabel a fixture as live.
-3. Validate unsafe patch on a disposable branch and confirm exactly the
-   intended dependency fail, missing-authorization-test fail, and retention
-   unknown.
-4. Validate the real remediation commit upgrades the dependency and restores
-   the stable marker on the existing authorization test without completing the
-   retention declaration.
-5. Exercise unauthorized, stale-SHA, edit/delete, expiry, red-with-approval, and
-   green-without-approval acceptance tests.
-6. Confirm action pins, workflow permissions, manual reviewer read scopes, and
-   ruleset. Confirm no secret/customer data exists.
-7. Confirm the permission-canary automation is disabled, its result remains
-   non-sensitive, reviewer templates are labeled blocked, and no live reviewer
-   automation is claimed.
-8. Cold-review the 2:54 storyboard with one technical and one non-technical
-   viewer.
+1. Run the existing `npm run check`. Restore declared dependencies only if
+   missing or required by a manifest/lockfile change.
+2. Reproduce the intended real collectors and remediation in a disposable
+   synthetic branch. Advisory databases can change; fix the demonstration
+   rather than relabeling a fixture as a live audit.
+3. Read the selected protected base policy and actual live repository rules.
+   The checked-in ruleset template is not proof of deployment.
+4. Obtain any legitimate human decisions needed for the synthetic exercise.
+   Each human decides independently; the agent never acts in their place.
+5. Preserve capture-ready A and B records. Verify their full SHAs, raw/final
+   distinction, policy identity, and artifact identity.
+6. Check that the old A exception is still within its expiry at the planned
+   capture time. Verify it is `stale` for B.
+7. Verify the green-B/pending-review state. If review has already happened,
+   adapt the script to the genuine approval record rather than fabricating a
+   pending state.
+8. Keep the automated-reviewer permission canary disabled. The prior
+   `UNSAFE_TOOL_BOUNDARY` result remains a product limitation, not a successful
+   automation demonstration.
 
-## T-30 minutes
+## Reviewer and board preparation
 
-1. Use a clean browser profile; hide bookmarks, notifications, tenant/account
-   details, and unrelated repositories.
-2. Sign in presenter/release manager in the main profile and independent
-   reviewer in an isolated profile.
-3. Set zoom so SHA, check name, finding states, and captions are readable.
-4. Wait for the unsafe head's deterministic Analysis/Publish path to complete.
-   Then manually start the installed Test, Security, and Policy agents in three
-   isolated, read-only sessions (or review and confirm their deep links).
-5. Match every session to the full unsafe head SHA, manually run the Evidence
-   Assembler, and load the resulting document into the mutable Evidence Board.
-6. Open tabs in storyboard order:
-   - unsafe PR body and red `AgentProof / gate`;
-   - three manually started specialist session results;
-   - Evidence Board loaded with unsafe-head evidence;
-   - release-manager PR comment box;
-   - remediation session with the real diff ready to push;
-   - Actions/PR view ready to show stale and then fresh evidence;
-   - independent-review profile;
-   - disabled permission-canary result, README/templates, and three-slide
-     outline.
-7. Copy the exact unsafe and expected remediated SHAs into presenter-only notes.
-8. Pre-type only the allowed exception skeleton; verify finding ID, full live
-   SHA, rationale, and expiry immediately before submission.
-9. Start recording at the PR, not a title slide.
+The default film does not need three separate reviewer-result tours.
+If advisory material is shown:
 
-## Exact live sequence
+- Finish the deterministic check before manually launching specialists.
+- Confirm each actual tool grant is read-only and appropriately scoped.
+- Stop on unexpected mutation capabilities. Do not work around the boundary
+  or re-enable the canary.
+- Manually assemble only matching repository/PR/base/policy/head fragments.
+- Show the board's mutable-coordination warning and GitHub authority.
+- Do not mix A notes with B evidence or imply that prose overrides the gate.
 
-Follow `storyboard.md` without adding time:
+If the safe runtime is unavailable, omit session footage and disclose that
+limitation; the deterministic stale-disposition proof can still be recorded.
 
-1. **0:00:** show unsafe SHA/origin and red gate.
-2. **0:14:** show check evidence and all three manually started, read-only,
-   same-SHA sessions.
-3. **0:31:** show the manual assembly result, three findings, and mutable-canvas
-   authority banner.
-4. **0:51:** submit the retention exception:
+## Capture day
 
-   ```text
-   /agentproof accept-exception AP-POL-RETENTION-001
-   sha: <UNSAFE_40_CHAR_SHA>
-   reason: Synthetic demo data remains bounded while the retention declaration is corrected.
-   expires: <YYYY-MM-DD>
-   ```
+1. Prepare a clean application region and notification-free browser profile.
+2. Confirm no tokens, authentication dialogs, personal UI, customer data,
+   tenant links, or unrelated repository content can enter the capture.
+3. Open the six logical surfaces in
+   [the recording guide](../video-recording-guide.md).
+4. Record H1 (hook), P1 (product proof), H2 (human boundary), F1 (feasibility),
+   and V1 (value/end) with handles. Do not try to fit real CI waits into a
+   116-second take.
+5. Log actual capture time, A expiry, full synthetic SHAs, source references,
+   and any editorial/fallback material.
+6. Build the first ten seconds and check that an unfamiliar viewer can
+   explain the mismatch.
+7. Assemble the remainder to [the storyboard](storyboard.md), add the
+   presenter's narration, and retime captions.
 
-   Use the actual stable finding ID emitted by the check if it differs.
+## Stop conditions
 
-5. **1:09:** show and push real dependency/test remediation.
-6. **1:33:** match the live new SHA and show the previous exception is stale.
-7. **1:51:** open fresh same-SHA evidence and submit a newly generated retention
-   exception using `<REMEDIATED_40_CHAR_SHA>`.
-8. **2:12:** show green gate and match final evidence SHA/digest.
-9. **2:32:** approve from the distinct reviewer profile; show merge available,
-   but do not merge.
-10. **2:43:** show the disabled canary's `apply_patch`, `bash`, and
-    `UNSAFE_TOOL_BOUNDARY` result, then the kit boundaries; stop by **2:54**.
+Stop or rewrite the affected claim if:
 
-## Go/no-go checks while recording
+- a shown record is for another PR, head, base policy, or artifact;
+- the old exception expired before capture;
+- a source shows `unknown`/`exception` differently from the narration;
+- the rules allow a merge the film claims is blocked;
+- a human action is missing, unauthorized, or manufactured for the camera;
+- the reviewer host exposes mutation tools;
+- the authoritative gate behaves incorrectly;
+- prohibited information appears.
 
-- Stop if a displayed evidence/check/comment SHA differs from the live PR head.
-- Stop if any specialist fragment is for another SHA.
-- Stop if a reviewer was started before the deterministic check completed or
-  has more than the required read tools.
-- Stop if the permission canary is enabled or if its failed result is described
-  as a functioning reviewer automation.
-- Stop if an account, notification, secret, customer/tenant identifier, or
-  unrelated content appears.
-- Stop if ruleset or check behavior differs from the narration.
-- Do not call a network/tool failure a pass.
-- Do not say “compliant,” “secure,” “verified author,” “immutable canvas,”
-  “automation-as-code,” “three live reviewer automations,” “safe automation
-  runtime,” or “automatic approval.”
+A network failure is not a pass. A synthetic fixture is not a real check.
+An accepted exception is not a passing test or an approval. A green check
+alone is not permission to merge.
 
-## Continuity fallback
+## After editing
 
-If a live App surface fails or a workflow exceeds the segment budget, follow
-`../fallback/README.md`. Use only a previously captured real run or the
-synthetic fixture with the required persistent label. State what is simulated,
-return to live GitHub authority as soon as possible, and never splice a
-different SHA into the same claimed evidence chain.
-
-## After the take
-
-1. Verify runtime is at most 2:54 and captions are readable.
-2. Frame-check every second for private data.
-3. Confirm every SHA and claim against GitHub/repository evidence.
-4. Confirm any fallback is continuously labeled and mentioned.
-5. Preserve the chosen real check/artifact URLs under approved retention.
-6. Perform [cleanup](../docs/cleanup.md) after submission.
+Verify the **actual exported master**, not just the timeline: at most 120
+seconds, with voice/caption synchronization, legible evidence, truthful
+source labels, and no private information. Complete
+[the checklist](../recording-checklist.md). Preserve required GitHub records
+under approved retention and follow [cleanup](../../docs/cleanup.md) when
+appropriate; do not delete evidence needed for review.

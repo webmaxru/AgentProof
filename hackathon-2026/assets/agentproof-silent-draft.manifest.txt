@@ -1,10 +1,13 @@
-00.png
-01.png
-02.png
-03.png
-04.png
-05.png
-06.png
-07.png
-08.png
-09.png
+PRECOMPUTED / NOT LIVE - STORYBOARD ONLY
+Type: silent cue-card animatic, not recorded product evidence
+Video: agentproof-silent-draft.mp4
+Duration: 116.000 seconds
+Dimensions: 1920x1080
+Frame rate: 30/1
+Frames: 3480
+Scenes: 8
+Narration words: 234
+Audio: none; presenter voiceover remains to be recorded
+Captions: full narration; rehearsal timings, retime to actual voice
+Timeline SHA-256: 92833dd391d3227cee9cf4067bc0d20334a6f6f5bf696a36f090d112ece78505
+Video SHA-256: f47da20737acbe87df5d46580a50aafa6fcece836fd809b2445becea61fdcd02

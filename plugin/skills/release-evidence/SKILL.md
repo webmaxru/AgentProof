@@ -65,6 +65,13 @@ note, or digest.
 - Require the evidence repository, PR, base, head, schema, policy base, policy
   digest, and source workflow to match independently. Equality of one SHA alone
   is not sufficient.
+- Do not parse an Actions workflow-run ID from a Check Run's `details_url`:
+  GitHub may use `https://github.com/OWNER/REPO/runs/CHECK_ID`. Resolve the
+  publisher from the genuine current-head check's `[Workflow run]` footer in
+  `output.summary` and the final artifact's `workflowRunUrl`. Independently
+  verify the expected GitHub Actions app, run repository/ID/name/path/event,
+  artifact identity, subject SHAs, and canonical digest against native GitHub
+  records and the protected workflow; matching links alone are insufficient.
 
 ## Deterministic workflow
 

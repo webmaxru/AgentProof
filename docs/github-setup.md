@@ -206,6 +206,15 @@ branch. Inspect the exact check `AgentProof / gate` and download
 `agentproof-evidence-pr-<PR_NUMBER>-<FULL_HEAD_SHA>`. Verify repository, PR, full
 base/head SHAs, protected policy digest, findings, and artifact digest.
 
+Check Run and Actions workflow-run IDs are different. GitHub may rewrite the
+check's `details_url` to `https://github.com/OWNER/REPO/runs/CHECK_ID`; do not use
+that ID with the Actions workflow-run API. Resolve the publisher from the
+`[Workflow run]` footer in the genuine current-head check's `output.summary`
+and the final artifact's `workflowRunUrl`, not from `details_url`. Independently
+verify the expected GitHub Actions app, run repository/ID/name/path/event,
+artifact identity, subject SHAs, and canonical digest against native GitHub
+records and the protected workflow. A URL match alone is not provenance.
+
 Create an active ruleset for `<DEFAULT_BRANCH>` requiring PRs, the exact check,
 at least one independent approval, code-owner review, stale approval dismissal,
 resolved conversations, and protection against deletion/force-push. Allow no

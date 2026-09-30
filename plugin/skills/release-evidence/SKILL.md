@@ -96,12 +96,16 @@ Create `.agentproof/analyze-metadata.json` with exactly this shape:
   "baseSha": "0123456789abcdef0123456789abcdef01234567",
   "headRef": "feature-branch",
   "headSha": "89abcdef0123456789abcdef0123456789abcdef",
-  "samplePath": "sample-repo"
+  "appPath": "."
 }
 ```
 
 The two example SHAs are placeholders and must be replaced with independently
-resolved full SHAs.
+resolved full SHAs. Resolve `appPath` from the protected workflow's
+`APPLICATION_PATH` setting; use `"."` for a root application or the reviewed
+contained path for a nested application. Schema `1.0.0` also accepts the legacy
+`samplePath` alias and rejects conflicting aliases. Do not trust the path from
+PR-controlled content.
 
 ### 3. Analyze
 

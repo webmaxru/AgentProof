@@ -12,7 +12,7 @@ rules:
       remediationHint: Fix every failed test and rerun the trusted Vitest command.
     requiredTests:
       - findingId: AP-TEST-AUTHORIZATION-001
-        testId: expense-approval.authorization.non-approver-denied
+        testId: authorization.non-approver-denied
         title: Non-approver authorization is tested
         severity: high
         exceptionable: false

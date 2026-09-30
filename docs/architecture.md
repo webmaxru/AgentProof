@@ -2,9 +2,10 @@
 
 ## Goal and trust statement
 
-AgentProof proves a bounded statement: for one repository, policy version, and
-pull-request head SHA, configured deterministic evidence was evaluated and an
-explicit human decision plus independent review governed merge.
+AgentProof evaluates a bounded statement for one repository, policy version,
+and pull-request head SHA. Enforced human decisions and independent review
+additionally require the target repository's verified GitHub protections.
+The kit itself contains no application; only toolkit CI is active here.
 
 It does **not** prove universal authorship, security, privacy, legal compliance,
 or production fitness.
@@ -13,7 +14,7 @@ or production fitness.
 
 | Layer                    | Component                                                 | Responsibility                                                                                                                              |
 | ------------------------ | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| Subject                  | Synthetic expense API and PR                              | Untrusted code and declared origin under review.                                                                                            |
+| Subject                  | Consuming application and PR                              | Untrusted code and declared origin under review.                                                                                            |
 | Collection               | `@agentproof/evidence-cli` collectors                     | Run tests/coverage, dependency audit, retention validation, and origin parsing; normalize failures as findings.                             |
 | Contract                 | `@agentproof/evidence-core`                               | Validate evidence and policy, canonicalize JSON, calculate digests, authorize dispositions, and compute the gate.                           |
 | Analysis workflow        | `agentproof-analyze.yml`                                  | Use protected workflow bootstrap, read-only GitHub access, no secrets, and an ephemeral runner to create raw head-SHA evidence.             |
@@ -64,12 +65,11 @@ each installed agent or reviewed deep link only after the deterministic result
 exists, confirms a read-only tool set, and later invokes the assembler manually.
 If the App cannot safely reduce an **All tools** default, the launch is canceled.
 
-The private-lab permission canary tested the host rather than trusting profile
-frontmatter. The picker was reduced from 50 tools to 21 read/list/search/get
-operations, but the resulting automation still reported
-`functions.apply_patch`, `functions.bash`, and Actions access beyond the source
-repository. It returned `UNSAFE_TOOL_BOUNDARY` before tool use and was disabled.
-The canary is not connected to the deterministic gate.
+Historical trials found that a narrowed tool picker could still leave mutation,
+shell, and cross-repository capabilities in the effective runtime. This is a
+limitation, not evidence of a currently safe reviewer. The permission canary
+must fail closed before tool use on such capabilities; it is not connected to
+the deterministic gate.
 
 The workflows use concurrency controls so an obsolete analysis cannot
 intentionally overwrite a newer revision. GitHub Actions artifacts have finite
@@ -87,17 +87,20 @@ retention and are evidence records, not permanent archives.
 
 ## Deployment boundary
 
-The MVP is one private GitHub.com repository with synthetic data. GitHub Actions
-are PR-triggered; the three reviewer sessions and Evidence Assembler are manual.
+The deployable workflows live in `templates/github-workflows/`. Copy them to
+the consuming repository's `.github/workflows/` only after reviewing its
+integration, permissions, and policy. Shared scripts expect those installed
+filenames. The application path is a protected shared setting, not PR input.
+
+The integration scope is one GitHub.com repository, initially with synthetic
+data. Installed Actions workflows are PR-triggered; the three reviewer sessions
+and Evidence Assembler are manual.
 Checked-in automation prompts are blocked setup/product-feedback templates, not
 live personal reviewer automations or automation-as-code. Cross-repository
 portfolio orchestration, automatic merge/release, and a locked audit store are
 out of scope.
 
-On 2026-09-02, the private live repository successfully produced the SHA-bound
-check, artifact, and PR summary, and the plugin installed from
-`msft-common-demos/AgentProof:plugin`. On 2026-09-03, repository profiles on the
-private automation lab's default branch appeared after project selection and a
-disposable opened/synchronized automation ran. Effective runtime validation
-still exposed mutation-capable built-ins, so no reviewer automation was
-accepted and the candidate was disabled.
+Historical check publication, plugin installation, or automation dispatch does
+not validate another target. Record actual integration results using
+[GitHub setup](github-setup.md). Missing private-repository ruleset entitlement
+and unavailable independent human reviewers are explicit rollout blockers.

@@ -539,7 +539,10 @@ export const OPEN_EVIDENCE_BOARD_SCHEMA = {
     repository: EVIDENCE_DOCUMENT_SCHEMA.properties.repository,
     pullRequestNumber: EVIDENCE_DOCUMENT_SCHEMA.properties.pullRequestNumber,
     expectedHeadSha: SHA_SCHEMA,
-    useSample: { type: "boolean" },
+    useSample: {
+      type: "boolean",
+      description: "Load a labeled synthetic contract fixture, never evidence from a live PR.",
+    },
   },
 };
 

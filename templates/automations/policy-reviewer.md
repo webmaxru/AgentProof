@@ -1,15 +1,13 @@
 # Policy Reviewer gated automation template
 
-> **Status: blocked reviewer target; runtime-validated unsafe.** The manual MVP
+> **Status: blocked until effective read-only permissions are verified.** The manual path
 > starts the installed AgentProof Policy Reviewer directly in a read-only Copilot
 > App session. This file is a versioned setup input, **not
 > automation-as-code**.
 
-On 2026-09-03, the repository reviewer appeared after selecting the private lab
-project, and opened/synchronized events ran. After all selectable mutation tools
-were removed, 21 read-only operations remained, but the runtime still exposed
-`functions.apply_patch`, `functions.bash`, and broader Actions access. The
-candidate returned `UNSAFE_TOOL_BOUNDARY`, made no mutation, and was disabled.
+Historical runtimes retained mutation, shell, and cross-repository capability
+after tool-picker narrowing. Recheck the actual host; never interpret a
+dispatching candidate or read-only prompt as proof of a safe boundary.
 
 ## Mandatory save gate
 
@@ -39,7 +37,7 @@ the automation can run safely.
 - Repository: `<OWNER>/<REPO>`
 - Events: PR opened and synchronized
 - Execution: cloud
-- Path filter: `policy/**`, `sample-repo/config/**`, PR metadata, and relevant
+- Path filter: `policy/**`, `<APP_PATH>/config/**`, PR metadata, and relevant
   source/test files
 - Agent: AgentProof Policy Reviewer
 - Allow: reviewer repository/PR/diff/check/artifact read; separately verified
@@ -72,7 +70,7 @@ For the triggering PR:
    Require repository, PR, schema, base/head SHA, and policy digest to agree.
    Missing, incomplete, malformed, mixed, unavailable, or stale evidence
    requires an explicitly unknown note, never a pass.
-3. Explain only how recorded facts map to this synthetic repository policy.
+3. Explain only how recorded facts map to the protected repository policy.
    Distinguish github-attributed, self-declared, and unknown origin. Do not infer
    model authorship or make legal, privacy, security, residency, or compliance
    determinations.

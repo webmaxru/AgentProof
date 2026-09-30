@@ -7,7 +7,6 @@ export default tseslint.config(
       "**/node_modules/**",
       "**/coverage/**",
       "packages/*/dist/**",
-      "sample-repo/dist/**",
       "plugin/extensions/evidence-board/dist/**",
       "plugin/extensions/evidence-board/extension.mjs",
     ],
@@ -20,7 +19,6 @@ export default tseslint.config(
         project: [
           "./packages/evidence-core/tsconfig.test.json",
           "./packages/evidence-cli/tsconfig.test.json",
-          "./sample-repo/tsconfig.json",
           "./plugin/extensions/evidence-board/tsconfig.json",
         ],
         tsconfigRootDir: import.meta.dirname,

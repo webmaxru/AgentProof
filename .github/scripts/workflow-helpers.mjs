@@ -2,6 +2,8 @@ import { assertPositiveInteger, assertRepositoryFullName, assertSha } from "./gi
 
 export const ANALYSIS_WORKFLOW_NAME = "AgentProof Analysis";
 export const ANALYSIS_WORKFLOW_PATH = ".github/workflows/agentproof-analyze.yml";
+// Adapt this on the protected base, never from PR inputs or repository variables.
+export const APPLICATION_PATH = ".";
 export const CHECK_NAME = "AgentProof / gate";
 export const COMMENT_MARKER = "<!-- agentproof-gate-summary -->";
 export const GITHUB_ACTIONS_APP_ID = 15368;
@@ -308,8 +310,8 @@ export function validateEvidenceHandoff({
     "pullRequestNumber",
     "pullRequestUrl",
     "repository",
-    "samplePath",
     "schemaVersion",
+    ...["appPath", "samplePath"].filter((key) => Object.hasOwn(metadata, key)),
   ];
   invariant(
     JSON.stringify(Object.keys(metadata).sort()) === JSON.stringify(metadataKeys.sort()),
@@ -352,7 +354,16 @@ export function validateEvidenceHandoff({
       metadata.authorAssociation === pullRequest.author_association,
     "Pull request author metadata changed after analysis",
   );
-  invariant(metadata.samplePath === "sample-repo", "Metadata sample path is unexpected");
+  invariant(
+    metadata.appPath === undefined ||
+      metadata.samplePath === undefined ||
+      metadata.appPath === metadata.samplePath,
+    "Metadata application path aliases conflict",
+  );
+  invariant(
+    (metadata.appPath ?? metadata.samplePath) === APPLICATION_PATH,
+    "Metadata application path is unexpected",
+  );
 
   invariant(
     rawEvidence !== null && typeof rawEvidence === "object" && !Array.isArray(rawEvidence),

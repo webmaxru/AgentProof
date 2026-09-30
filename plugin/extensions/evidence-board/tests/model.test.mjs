@@ -10,15 +10,16 @@ import {
 } from "../dist/model.js";
 
 const sample = JSON.parse(
-  await readFile(new URL("../artifacts/sample-evidence.json", import.meta.url), "utf8"),
+  await readFile(new URL("../artifacts/contract-fixture.json", import.meta.url), "utf8"),
 );
 
 function copy(value) {
   return structuredClone(value);
 }
 
-test("accepts the schema-valid sample and preserves all four states", () => {
+test("accepts the synthetic contract fixture and preserves all four states", () => {
   const document = parseEvidenceDocument(sample);
+  assert.equal(document.repository, "OWNER/REPO");
   assert.equal(document.schemaVersion, "1.0.0");
   assert.deepEqual(document.gate.counts, {
     pass: 1,

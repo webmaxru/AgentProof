@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0.0",
   "documentType": "final",
-  "repository": "octo-org/agentproof-demo",
+  "repository": "OWNER/REPO",
   "pullRequestNumber": 42,
   "baseSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "headSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -32,7 +32,7 @@
       "state": "pass",
       "severity": "moderate",
       "title": "Coverage threshold met",
-      "summary": "Vitest reported coverage above every protected threshold.",
+      "summary": "Synthetic contract fixture: coverage is above every protected threshold.",
       "evidenceRefs": [
         {
           "kind": "coverage",
@@ -58,11 +58,11 @@
       "state": "fail",
       "severity": "high",
       "title": "Production dependencies exceed severity policy",
-      "summary": "The normalized npm audit report ties a high-severity advisory to a runtime dependency.",
+      "summary": "Synthetic contract fixture: an audit finding exceeds the severity policy.",
       "evidenceRefs": [
         {
           "kind": "advisory",
-          "name": "Synthetic demonstration advisory",
+          "name": "Synthetic contract advisory",
           "url": "https://github.com/advisories"
         },
         {
@@ -99,7 +99,7 @@
       "collector": "vitest",
       "sourceSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       "facts": {
-        "requiredTestId": "expense-approval.authorization.non-approver-denied",
+        "requiredTestId": "authorization.non-approver-denied",
         "matchCount": 0
       }
     },
@@ -120,7 +120,7 @@
         {
           "kind": "file",
           "name": "Synthetic data declaration",
-          "path": "sample-repo/config/data-handling.yml"
+          "path": "config/data-handling.yml"
         }
       ],
       "exceptionable": true,
@@ -141,9 +141,9 @@
       "actor": "release-manager",
       "actorPermission": "maintain",
       "commentId": "1001",
-      "commentUrl": "https://github.com/octo-org/agentproof-demo/pull/42#issuecomment-1001",
+      "commentUrl": "https://github.com/OWNER/REPO/pull/42#issuecomment-1001",
       "bodySha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-      "rationale": "Synthetic demo data is bounded while the declaration is corrected.",
+      "rationale": "Synthetic fixture data is bounded while the declaration is corrected.",
       "expires": "2026-10-31",
       "recordedAt": "2026-09-01T10:00:00.000Z",
       "boundHeadSha": "dddddddddddddddddddddddddddddddddddddddd",
@@ -157,9 +157,9 @@
       "actor": "release-manager",
       "actorPermission": "maintain",
       "commentId": "1002",
-      "commentUrl": "https://github.com/octo-org/agentproof-demo/pull/42#issuecomment-1002",
+      "commentUrl": "https://github.com/OWNER/REPO/pull/42#issuecomment-1002",
       "bodySha256": "2222222222222222222222222222222222222222222222222222222222222222",
-      "rationale": "This bounded demonstration exception expired before evaluation.",
+      "rationale": "This synthetic fixture exception expired before evaluation.",
       "expires": "2026-08-31",
       "recordedAt": "2026-08-20T10:00:00.000Z",
       "boundHeadSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -173,7 +173,7 @@
       "actor": "security-owner",
       "actorPermission": "maintain",
       "commentId": "1003",
-      "commentUrl": "https://github.com/octo-org/agentproof-demo/pull/42#issuecomment-1003",
+      "commentUrl": "https://github.com/OWNER/REPO/pull/42#issuecomment-1003",
       "bodySha256": "3333333333333333333333333333333333333333333333333333333333333333",
       "rationale": "Upgrade the vulnerable runtime dependency and regenerate evidence.",
       "expires": null,
@@ -187,7 +187,7 @@
   "reviewerNotes": [
     {
       "specialist": "test",
-      "sessionUrl": "https://github.com/octo-org/agentproof-demo/pull/42",
+      "sessionUrl": "https://github.com/OWNER/REPO/pull/42",
       "sourceSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       "summary": "Coverage passed, but the required authorization test identifier is absent.",
       "findingIds": ["AP-TEST-COVERAGE-001", "AP-TEST-AUTHORIZATION-001"],
@@ -196,7 +196,7 @@
     },
     {
       "specialist": "security",
-      "sessionUrl": "https://github.com/octo-org/agentproof-demo/pull/42",
+      "sessionUrl": "https://github.com/OWNER/REPO/pull/42",
       "sourceSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       "summary": "The high-severity runtime advisory requires remediation.",
       "findingIds": ["AP-SEC-NPM-AUDIT-001"],
@@ -205,7 +205,7 @@
     },
     {
       "specialist": "policy",
-      "sessionUrl": "https://github.com/octo-org/agentproof-demo/pull/42",
+      "sessionUrl": "https://github.com/OWNER/REPO/pull/42",
       "sourceSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       "summary": "The retention rule is exceptionable, but no current valid acceptance exists.",
       "findingIds": ["AP-POL-RETENTION-001"],
@@ -230,7 +230,7 @@
     "validUntil": null
   },
   "artifact": {
-    "sha256": "af6e7cb138f97ee28ca3045a113f241b4a07aca218ee6a04b122430c905bb840",
-    "workflowRunUrl": "https://github.com/octo-org/agentproof-demo/actions/runs/123456"
+    "sha256": "12e5f2f5ae1672b837a24b479f7717dd9b094ffa742aad6b70da1b0188c1ad14",
+    "workflowRunUrl": "https://github.com/OWNER/REPO/actions/runs/123456"
   }
 }

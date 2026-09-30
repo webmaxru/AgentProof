@@ -12,6 +12,7 @@ import {
 import {
   ANALYSIS_WORKFLOW_NAME,
   ANALYSIS_WORKFLOW_PATH,
+  APPLICATION_PATH,
   buildCompletedCheckPayload,
   buildPendingCheckPayload,
   classifyDispositionEvent,
@@ -325,7 +326,7 @@ function evidenceHandoffFixture() {
     baseSha: pullRequest.base.sha,
     headRef: pullRequest.head.ref,
     headSha: pullRequest.head.sha,
-    samplePath: "sample-repo",
+    appPath: APPLICATION_PATH,
   };
   const rawEvidence = {
     schemaVersion: "1.0.0",
@@ -358,6 +359,30 @@ test("evidence handoff binds artifact content to current GitHub state", () => {
   });
   fixture.pullRequest.body = "edited after analysis";
   assert.throws(() => validateEvidenceHandoff(fixture), /body changed/);
+});
+
+test("evidence handoff rejects an application path not selected by protected code", () => {
+  for (const appPath of [
+    `${APPLICATION_PATH}/unexpected`,
+    "..",
+    "/tmp/app",
+    "C:\\app",
+    undefined,
+  ]) {
+    const fixture = evidenceHandoffFixture();
+    fixture.metadata.appPath = appPath;
+    assert.throws(() => validateEvidenceHandoff(fixture), /application path/);
+  }
+});
+
+test("evidence handoff accepts the legacy path alias but rejects conflicting values", () => {
+  const fixture = evidenceHandoffFixture();
+  fixture.metadata.samplePath = fixture.metadata.appPath;
+  assert.equal(validateEvidenceHandoff(fixture).headSha, HEAD_SHA);
+  delete fixture.metadata.appPath;
+  assert.equal(validateEvidenceHandoff(fixture).headSha, HEAD_SHA);
+  fixture.metadata.appPath = `${APPLICATION_PATH}/unexpected`;
+  assert.throws(() => validateEvidenceHandoff(fixture), /aliases conflict/);
 });
 
 test("Check Runs API payloads separate immutable create fields from updates", () => {

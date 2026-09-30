@@ -163,6 +163,30 @@ Before enabling Actions:
    with independent code-owner review.
 5. Review contributor/fork eligibility, approved Actions, and artifact retention.
 
+When using the Actions REST API, disable execution with `{"enabled": false}`
+alone. Combining `enabled: false` with `allowed_actions` returns HTTP 409:
+`You can't specify allowed_actions unless enabled is true.`
+
+For an **empty target repository**, finish the review before publishing any
+workflow-bearing commit, then configure these endpoints in order:
+
+1. `PUT /repos/<OWNER>/<REPO>/actions/permissions/workflow`: set
+   `default_workflow_permissions: "read"` and
+   `can_approve_pull_request_reviews: false`.
+2. `PUT /repos/<OWNER>/<REPO>/actions/permissions`: set `enabled: true`,
+   `allowed_actions: "selected"`, and `sha_pinning_required: true`.
+3. `PUT /repos/<OWNER>/<REPO>/actions/permissions/selected-actions`: set
+   `github_owned_allowed: false`, `verified_allowed: false`, and
+   `patterns_allowed` to the exact reviewed action references, each pinned to a
+   full commit SHA.
+4. Read back the effective settings and selected-action list before pushing the
+   reviewed baseline. A failed API request is not a partially successful setup.
+
+Do not apply this empty-repository sequence blindly to an existing integration.
+Inventory its current workflows, triggers, and allowlist, and arrange an
+owner-approved rollout that cannot execute unreviewed code during intermediate
+configuration states.
+
 | Workflow                 | Trigger                                            | Writes                                                     |
 | ------------------------ | -------------------------------------------------- | ---------------------------------------------------------- |
 | `AgentProof Analysis`    | Eligible PR opened/synchronized; trusted dispatch  | Raw artifact, no repository mutation.                      |

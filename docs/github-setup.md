@@ -56,7 +56,7 @@ manifests, source, tests, ownership rules, or existing workflows:
 - `packages/evidence-core/` and `packages/evidence-cli/`;
 - the four `templates/github-workflows/*.yml` files copied into the target's
   `.github/workflows/` under their existing filenames, plus `.github/scripts/`
-  and `.github/rulesets/`;
+  and the application payload `.github/rulesets/agentproof.json`;
 - `policy/release-policy.yml` and its schema;
 - the root `tsconfig.base.json` needed by the two package builds, adapting
   their `extends` paths if the application already owns that filename;

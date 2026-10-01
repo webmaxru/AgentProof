@@ -217,6 +217,14 @@ successful Analysis and artifact identity. Never merely widen an accepted
 event string, invent a completion event, infer an Analysis from the latest run,
 or ignore changed attempts or PR body/head.
 
+An external read-only consumer does not have authentic runner context or
+necessarily access to dispatch inputs. It may reuse `validateNativePublisherRun`
+with native records and an independently trusted workflow revision, run ID and
+attempt. That verifies Publisher identity only, not completion, a passing gate,
+or independently observed dispatch inputs. Do not synthesize an event or
+`GITHUB_*` context to call the workflow-specific validator; keep unavailable
+source-linkage evidence explicit.
+
 If dispatch details are unavailable, a wait expires, or no validated Publisher
 finishes, retain the blocking/pending result and escalate to an owner. The owner
 may use a new default-branch Analysis dispatch for the current full head SHA;

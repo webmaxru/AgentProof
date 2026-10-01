@@ -56,9 +56,22 @@ flowchart LR
    repository, PR, schema, artifact metadata, policy base SHA, and current head
    SHA before writing.
 3. **Disposition:** never executes PR code. It authorizes the actor and command,
-   then dispatches a fresh analysis rather than trusting a canvas draft.
-4. **Revalidate:** periodically dispatches fresh evidence for open PRs so
-   expiry/deletion cannot preserve an obsolete decision indefinitely.
+   invalidates the gate, and uses the shared exact-run controller rather than
+   trusting a canvas draft.
+4. **Revalidate:** uses the same controller per eligible open PR, with at most
+   four concurrent PRs. The controller gets the native Analysis ID from the
+   dispatch response, waits boundedly for that exact successful attempt,
+   rechecks the subject, and explicitly dispatches trusted Publisher. It exits
+   without waiting for Publisher, which needs the same per-PR gate lock.
+
+Owner-origin Analysis completion still uses `workflow_run`. Controller-origin
+bot Analysis is excluded from that ingress to avoid duplicate publication if
+GitHub propagates its completion. Publisher's explicit ingress validates its
+own native default-branch workflow/run identity and the exact Analysis
+ID/attempt; it does not construct a synthetic completion event. No Analysis
+write capability or additional credential is introduced. Failed refresh remains
+blocking; live comment, periodic and expiry behavior must be verified after
+human-controlled protected-base deployment.
 
 Reviewer sessions are outside this write-capable workflow path. A user starts
 each installed agent or reviewed deep link only after the deterministic result
@@ -104,3 +117,6 @@ Historical check publication, plugin installation, or automation dispatch does
 not validate another target. Record actual integration results using
 [GitHub setup](github-setup.md). Missing private-repository ruleset entitlement
 and unavailable independent human reviewers are explicit rollout blockers.
+Toolkit-only protection uses `.github/rulesets/agentproof-toolkit.json` and
+requires CI plus independent review, not the application gate. Consuming
+applications use `.github/rulesets/agentproof.json`, which requires both checks.

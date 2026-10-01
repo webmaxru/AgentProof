@@ -76,6 +76,11 @@ npm run agentproof -- --help
 ```
 
 These commands check the toolkit, not a consuming application's GitHub controls.
+Toolkit protection uses the separate
+[CI-only ruleset payload](.github/rulesets/agentproof-toolkit.json), with
+independent code-owner review and no bypass. Application adoption retains
+[both required checks](.github/rulesets/agentproof.json); CI-only toolkit
+protection must not replace an application's evidence gate.
 For application integration, follow [GitHub setup](docs/github-setup.md) and
 the [CLI contract](packages/evidence-cli/README.md). Start with synthetic,
 non-secret content in a disposable target repository.
@@ -85,6 +90,16 @@ protected setting selects a nested application when needed. The trusted
 collector uses `tests/**/*.test.ts` and `src/**/*.ts`, not the PR's npm test
 script or Vitest configuration. Audit always uses the repository-root lockfile.
 Review these assumptions before adapting an existing application.
+
+As of 2026-10-01, this public toolkit repository has native default-branch
+protection requiring strict CI, independent code-owner review, stale-review
+dismissal, last-push approval, resolved threads, and no bypass. Its Actions
+settings require the four reviewed full-SHA action pins, read-only default
+workflow tokens, and no automated PR approval. A distinct human code owner is
+still required; see [safe onboarding](docs/github-setup.md#1-check-prerequisites-and-enforcement-entitlement).
+The exact-run automatic-refresh repair remains a reviewable proposal until
+humans deploy it to a protected base and verify the live path. Neither public
+visibility nor local passing tests complete that rollout.
 
 ## Install the Copilot plugin
 

@@ -1040,3 +1040,30 @@ test("checked-in ruleset has the required fail-closed controls", async () => {
   );
   assert.equal(validateRulesetPayload(payload), payload);
 });
+
+test("toolkit ruleset requires CI alone without weakening independent review protections", async () => {
+  const [application, toolkit] = await Promise.all(
+    ["agentproof.json", "agentproof-toolkit.json"].map(async (name) =>
+      JSON.parse(await readFile(new URL(`../rulesets/${name}`, import.meta.url), "utf8")),
+    ),
+  );
+  validateRulesetPayload(application);
+  const { name, rules, ...scope } = toolkit;
+  const { name: applicationName, rules: applicationRules, ...applicationScope } = application;
+  assert.notEqual(name, applicationName);
+  assert.equal(name, "AgentProof toolkit protection");
+  assert.deepEqual(scope, applicationScope);
+  const expectedRules = structuredClone(applicationRules);
+  const review = expectedRules.find((rule) => rule.type === "pull_request").parameters;
+  Object.assign(review, {
+    allowed_merge_methods: ["merge", "squash", "rebase"],
+    require_extra_approval_for_unattributed_changes: true,
+    required_reviewers: [],
+  });
+  expectedRules.find(
+    (rule) => rule.type === "required_status_checks",
+  ).parameters.required_status_checks = [
+    { context: "Build, lint, and test", integration_id: 15368 },
+  ];
+  assert.deepEqual(rules, expectedRules);
+});

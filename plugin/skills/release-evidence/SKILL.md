@@ -201,6 +201,29 @@ do not become fabricated notes or passes.
 Comment creation/edit/deletion, a new commit, expiry, and the six-hour/manual
 revalidation path must recollect current GitHub state and rerun trusted analysis.
 
+For automatic refresh, verify the controller's exact native Analysis run ID
+and attempt, then the explicitly dispatched Publisher run. The controller
+requires REST API `2026-03-10` dispatch details, waits at most 20 minutes for
+Analysis, rechecks the PR, and exits after dispatching Publisher; it does not
+wait while holding Publisher's gate lock. A successful controller dispatch is
+not a completed gate.
+
+Owner-origin Analysis uses the native `workflow_run` ingress. Bot-origin
+Analysis uses Publisher's `workflow_dispatch` ingress with `analysis_run_id`
+and `analysis_run_attempt`; it is excluded from the completion ingress to avoid
+duplicates. Independently verify the Publisher workflow ID/name/path, native
+run ID/attempt/event/repository, default-branch ref and SHA, then the exact
+successful Analysis and artifact identity. Never merely widen an accepted
+event string, invent a completion event, infer an Analysis from the latest run,
+or ignore changed attempts or PR body/head.
+
+If dispatch details are unavailable, a wait expires, or no validated Publisher
+finishes, retain the blocking/pending result and escalate to an owner. The owner
+may use a new default-branch Analysis dispatch for the current full head SHA;
+this read-only skill must not dispatch it. Local controller tests do not prove
+live comment/scheduled/expiry refresh, and deployment to a protected base
+remains a separate human-controlled step.
+
 ## Finding and gate semantics
 
 - `pass`: affirmative, parseable evidence satisfies the protected rule for this
@@ -261,7 +284,9 @@ release, or make a certification claim while stopped.
 - **Trusted publisher:** only artifact/content reads and the bounded check/PR
   summary writes configured by the protected workflow; it never runs PR code.
 - **Disposition/revalidation workflows:** read current PR/comment state and may
-  dispatch trusted analysis; they never decide or approve an exception.
+  invalidate the gate, wait for an exact read-only Analysis run, and dispatch
+  trusted Publisher using their existing Actions/check scopes; they never
+  decide or approve an exception.
 
 Escalate test/authorization ambiguity to the Test Reviewer and code owner,
 dependency/advisory ambiguity to the Security Reviewer and security owner,

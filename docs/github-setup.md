@@ -23,6 +23,29 @@ author-owned target PR. Configure a distinct person or team and verify that
 GitHub recognizes them as a valid code owner with the necessary repository
 access. An exception decision and independent approval are separate controls.
 
+When the current protected-base `CODEOWNERS` names only the PR author, adding
+another name in that author's PR does not solve independent review: GitHub uses
+the base branch's ownership rules. An owner must explicitly select a different
+human and grant the required access. That person authors a separate onboarding
+PR updating the ownership rules; the existing code owner can then independently
+review it. After humans merge that onboarding change, the newly configured
+code owner can review the original author's migration/setup PR. Do not invent
+an identity, send an unsolicited invitation, self-approve, or bypass protection.
+
+### Toolkit versus application rules
+
+The application adoption payload, `.github/rulesets/agentproof.json`, requires
+both `AgentProof / gate` and `Build, lint, and test` from GitHub Actions app
+`15368`, plus independent code-owner review. The existing
+`configure-ruleset.mjs` script targets that **application** payload.
+
+The separate `.github/rulesets/agentproof-toolkit.json` protects a toolkit-only
+repository with strict `Build, lint, and test`, the same independent-review
+requirements, and no bypass actors. It does not require an application gate for
+an absent application. Do not substitute this CI-only payload in an application
+deployment. Both protect the default branch against deletion and force-push;
+human owners review and apply the appropriate payload.
+
 ## 2. Integrate a reviewed toolkit revision
 
 Keep Actions disabled while reviewing the initial integration. Pin the toolkit
@@ -187,17 +210,68 @@ Inventory its current workflows, triggers, and allowlist, and arrange an
 owner-approved rollout that cannot execute unreviewed code during intermediate
 configuration states.
 
-| Workflow                 | Trigger                                            | Writes                                                     |
-| ------------------------ | -------------------------------------------------- | ---------------------------------------------------------- |
-| `AgentProof Analysis`    | Eligible PR opened/synchronized; trusted dispatch  | Raw artifact, no repository mutation.                      |
-| `AgentProof Publish`     | Successful analysis workflow completion            | Validated check, marker-delimited summary, final artifact. |
-| `AgentProof Disposition` | PR comment create/edit/delete; PR metadata refresh | Invalidates and dispatches current-head analysis.          |
-| `AgentProof Revalidate`  | Every six hours or manual dispatch                 | Dispatches current open-PR analysis.                       |
+| Workflow                 | Trigger                                                         | Writes                                                             |
+| ------------------------ | --------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `AgentProof Analysis`    | Eligible PR opened/synchronized; trusted dispatch               | Raw artifact, no repository mutation.                              |
+| `AgentProof Publish`     | Owner-origin analysis completion; exact-run controller dispatch | Validated check, marker-delimited summary, final artifact.         |
+| `AgentProof Disposition` | PR comment create/edit/delete; PR metadata refresh              | Invalidates, collects current-head analysis, dispatches Publisher. |
+| `AgentProof Revalidate`  | Every six hours or `agentproof-revalidate` repository dispatch  | Same bounded controller for each eligible open PR.                 |
 
 Automatic untrusted execution is limited to `OWNER`, `MEMBER`, and
 `COLLABORATOR` author associations. Inspect the actual protected workflow before
 using manual dispatch for another contributor. `Analysis: success` means a raw
 document was produced; it does **not** mean the gate or collectors passed.
+
+### Exact-run automatic refresh
+
+The shared trusted controller invalidates the current gate, dispatches Analysis,
+and uses the **native run ID from that dispatch response**. It polls only that
+run and its first attempt for at most 20 minutes, allowing the 15-minute Analysis
+job plus bounded queue time. Controller jobs allow 25 minutes overall; periodic
+revalidation retains at most four concurrent PR controllers. Missing/malformed
+dispatch details, API errors, cancelled/failed/timed-out Analysis, stale PR
+head/base/body, or invalid artifacts stop the controller with an error and leave
+the gate blocking. There is no latest-run lookup or automatic redispatch fallback.
+
+This requires the already-pinned GitHub REST API `2026-03-10`, which
+[returns HTTP 200 and native run details](https://docs.github.com/en/rest/about-the-rest-api/breaking-changes?apiVersion=2026-03-10)
+for workflow dispatch. That version removes the older `return_run_details`
+parameter. A legacy HTTP 204 without an exact run ID is not sufficient.
+
+After successful native Analysis and live-subject checks, the controller
+explicitly dispatches Publisher on the repository's default branch with
+`analysis_run_id` and `analysis_run_attempt`. It then exits: waiting for
+Publisher while holding the shared per-PR gate concurrency group would deadlock.
+No write permission or credential is added to Analysis.
+
+Publisher independently validates its own native workflow/run identity,
+attempt, event, default-branch ref, and executing SHA before trusting either
+ingress. Both paths use the same native Analysis and artifact checks. Owner
+PR/manual Analysis retains `workflow_run` publication; controller-origin bot
+Analysis uses only explicit dispatch, so resumed GitHub completion propagation
+cannot duplicate its publication. Analysis attempt and live PR metadata/body
+are checked again at artifact handoff and before check/comment writes.
+
+Deploy all changed controller scripts, shared validators, and the three
+Publisher/Disposition/Revalidate workflow definitions together through a
+human-reviewed protected-base change. Local regression tests are not a live
+rollout: demonstrate metadata, authorized comment changes, periodic/expiry
+refresh, and overlapping-run behavior after that deployment before claiming
+those controls verified. Previously observed successful bot Analysis without
+Publisher is an unresolved live gap until the new path is demonstrated; its
+service-level cause is not established.
+
+For owner-controlled recovery on an existing installation, re-read the live
+head and run a **new Analysis** from the actual default branch, using the
+owner's existing authorized identity:
+
+```text
+gh workflow run agentproof-analyze.yml --repo OWNER/REPO --ref DEFAULT_BRANCH -f pr_number=PR_NUMBER -f expected_head_sha=FULL_HEAD_SHA
+```
+
+Do not run this as a reviewer agent, rerun an obsolete Publisher, add a token,
+or manufacture a check result. Verify native Analysis, Publisher, artifact and
+the exact-head gate afterward; successful refresh can legitimately end blocked.
 
 ## 6. Seed the check and configure required review
 
@@ -241,6 +315,7 @@ Application path and trusted test/coverage globs: <VALUES>
 Base/head SHAs: <FULL_BASE_SHA> / <FULL_HEAD_SHA>
 Node/npm/plugin/host versions: <VERSIONS>
 Exact commands, exit codes, Check Run and artifact references: <RECORDS>
+Controller/Analysis/Publisher native run IDs and attempts: <RECORDS>
 Setup deviations: <PATHS, BUILD/DEPENDENCY REQUIREMENTS, PLAN LIMITATIONS>
 Human-control results and outstanding owners: <VERIFIED, FAILED, BLOCKED, NOT RUN>
 ```
@@ -258,6 +333,8 @@ Exercise disposable PRs independently:
 8. Overlapping runs unable to publish success for an obsolete head.
 9. Effective reviewer tools excluding mutation, shell, and cross-repository
    capabilities; otherwise keep reviewer automations disabled.
+10. Bot-origin metadata/comment/scheduled refresh reaching explicit Publisher,
+    without duplicate publication or an indefinitely pending gate.
 
 Do not ask an agent to impersonate the human actor in cases 5-7. Leave missing
 cases explicit instead of claiming complete live human-control validation.

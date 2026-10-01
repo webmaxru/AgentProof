@@ -75,6 +75,14 @@ Evaluation uses `policy/release-policy.yml` from the protected PR base revision.
 The evidence records the policy path, version, base SHA, and digest. A PR cannot
 make itself green by weakening the policy it is being evaluated against.
 
+The PR policy base may be older than the current protected default-branch
+workflow revision. Do not replace `baseSha` with that workflow SHA or require
+them to be equal. Resolve workflow provenance independently from native GitHub
+repository/ref/run records. Current orchestration validates source attempts and
+handoff state; the separately pinned PR-base evaluator and policy produce the
+same base/head-bound evidence contract. A changed PR base or default workflow
+revision during the handoff is blocking, not permission to select another base.
+
 ## Canonicalization and integrity
 
 Each raw, final, and trusted review-fragment document is validated,

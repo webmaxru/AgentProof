@@ -12,18 +12,18 @@ or production fitness.
 
 ## Components
 
-| Layer                    | Component                                                 | Responsibility                                                                                                                              |
-| ------------------------ | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| Subject                  | Consuming application and PR                              | Untrusted code and declared origin under review.                                                                                            |
-| Collection               | `@agentproof/evidence-cli` collectors                     | Run tests/coverage, dependency audit, retention validation, and origin parsing; normalize failures as findings.                             |
-| Contract                 | `@agentproof/evidence-core`                               | Validate evidence and policy, canonicalize JSON, calculate digests, authorize dispositions, and compute the gate.                           |
-| Analysis workflow        | `agentproof-analyze.yml`                                  | Use protected workflow bootstrap, read-only GitHub access, no secrets, and an ephemeral runner to create raw head-SHA evidence.             |
-| Publisher                | `agentproof-publish.yml`                                  | Run trusted base code, validate provenance and live SHA, apply protected-base policy, publish the check/comment, and retain final evidence. |
-| Disposition/revalidation | `agentproof-disposition.yml`, `agentproof-revalidate.yml` | Re-evaluate on decision changes and periodically so deleted or expired acceptance cannot leave a stale green result.                        |
-| App reviewers            | Test, Security, Policy                                    | User starts three isolated, read-only sessions after the check; they return same-SHA advisory fragments and cannot write to GitHub.         |
-| Assembler and canvas     | Evidence Assembler, Evidence Board                        | User runs assembly manually to reject mixed-SHA inputs and load a mutable operational view and decision draft.                              |
-| Permission canary        | Disposable personal PR automation                         | Inspects the effective runtime tool boundary, stops before tool use on mutation capability, and is disabled after a failed validation.      |
-| Governance               | GitHub ruleset, CODEOWNERS, independent review            | Require the stable check and a separate human approval before merge.                                                                        |
+| Layer                    | Component                                                 | Responsibility                                                                                                                         |
+| ------------------------ | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Subject                  | Consuming application and PR                              | Untrusted code and declared origin under review.                                                                                       |
+| Collection               | `@agentproof/evidence-cli` collectors                     | Run tests/coverage, dependency audit, retention validation, and origin parsing; normalize failures as findings.                        |
+| Contract                 | `@agentproof/evidence-core`                               | Validate evidence and policy, canonicalize JSON, calculate digests, authorize dispositions, and compute the gate.                      |
+| Analysis workflow        | `agentproof-analyze.yml`                                  | Use protected workflow bootstrap, read-only GitHub access, no secrets, and an ephemeral runner to create raw head-SHA evidence.        |
+| Publisher                | `agentproof-publish.yml`                                  | Run current orchestration and the separate PR-base evaluator/policy; validate provenance and publish the check/comment/evidence.       |
+| Disposition/revalidation | `agentproof-disposition.yml`, `agentproof-revalidate.yml` | Re-evaluate on decision changes and periodically so deleted or expired acceptance cannot leave a stale green result.                   |
+| App reviewers            | Test, Security, Policy                                    | User starts three isolated, read-only sessions after the check; they return same-SHA advisory fragments and cannot write to GitHub.    |
+| Assembler and canvas     | Evidence Assembler, Evidence Board                        | User runs assembly manually to reject mixed-SHA inputs and load a mutable operational view and decision draft.                         |
+| Permission canary        | Disposable personal PR automation                         | Inspects the effective runtime tool boundary, stops before tool use on mutation capability, and is disabled after a failed validation. |
+| Governance               | GitHub ruleset, CODEOWNERS, independent review            | Require the stable check and a separate human approval before merge.                                                                   |
 
 ## Data flow
 
@@ -52,7 +52,8 @@ flowchart LR
 1. **Analyze:** may execute PR-controlled application/test code, but receives no
    secrets and only read access. It cannot publish a check or comment.
 2. **Publish:** has check/comment write capability, but executes trusted
-   base/default-branch code only. It validates the incoming workflow,
+   default-branch orchestration and a separately checked-out PR-base evaluator.
+   It validates the incoming workflow,
    repository, PR, schema, artifact metadata, policy base SHA, and current head
    SHA before writing.
 3. **Disposition:** never executes PR code. It authorizes the actor and command,
@@ -63,6 +64,14 @@ flowchart LR
    dispatch response, waits boundedly for that exact successful attempt,
    rechecks the subject, and explicitly dispatches trusted Publisher. It exits
    without waiting for Publisher, which needs the same per-PR gate lock.
+
+Workflow/default-branch SHA, PR policy base SHA, and subject head SHA are separate
+identities. Native repository/default-ref resolution binds current orchestration;
+the PR base may legitimately be older. Source-attempt, controller and live
+head/base/body validation always run from the current workflow bootstrap, never
+from that old base's publication scripts. The analyzer, evaluator and policy
+remain bound to the immutable PR base. Fresh repository/ref checks reject a
+changed default branch or tip before either dispatch or publication.
 
 Owner-origin Analysis completion still uses `workflow_run`. Controller-origin
 bot Analysis is excluded from that ingress to avoid duplicate publication if

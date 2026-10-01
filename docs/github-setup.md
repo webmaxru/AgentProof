@@ -121,7 +121,7 @@ Default collector assumptions:
 | Covered files                | `src/**/*.ts`, including `src/server.ts`.                                                                                                                        |
 | Retention declaration        | `<APPLICATION_PATH>/config/data-handling.yml`.                                                                                                                   |
 | Dependency audit             | Root `package.json` and root `package-lock.json`, including workspace production dependencies; not just the selected app.                                        |
-| Tool/dependency installation | Trusted base checkout only, with `npm ci --ignore-scripts`. No installation from the PR.                                                                         |
+| Tool/dependency installation | Verified workflow/PR-base checkouts only, with `npm ci --ignore-scripts`. No installation from the PR.                                                           |
 | Test invocation              | Generated trusted Vitest configuration; PR npm scripts and Vitest configuration are not run.                                                                     |
 | Staging                      | A fresh temporary directory outside the subject checkout; only the selected app tree and root `tsconfig.base.json` are copied, with trusted dependencies linked. |
 
@@ -230,8 +230,30 @@ run and its first attempt for at most 20 minutes, allowing the 15-minute Analysi
 job plus bounded queue time. Controller jobs allow 25 minutes overall; periodic
 revalidation retains at most four concurrent PR controllers. Missing/malformed
 dispatch details, API errors, cancelled/failed/timed-out Analysis, stale PR
-head/base/body, or invalid artifacts stop the controller with an error and leave
+head/base/body, a changed default branch/revision, or invalid artifacts stop the controller with an error and leave
 the gate blocking. There is no latest-run lookup or automatic redispatch fallback.
+
+The **workflow revision is not the PR policy base**. Resolve the native
+repository's current `default_branch` and its exact Git ref independently with
+`resolveTrustedWorkflowRevision`; never derive the workflow SHA from PR metadata
+or accept an unverified producer value. The controller binds this SHA to its
+actual `GITHUB_WORKFLOW_SHA` and the dispatched Analysis run's native `head_sha`.
+It rechecks the ref before each dispatch. Publisher independently binds its
+native run and executing SHA to that revision, then re-resolves current repository
+and default-ref state at metadata handoff and immediately before each native
+write. A branch-name change must fail closed even if its commit is unchanged.
+For `pull_request_target`, native Analysis `head_sha` is the PR head, not the
+workflow revision; retain that event's native PR/artifact association checks.
+
+An older, unchanged PR `base.sha` remains the authority for the analyzer,
+evaluator, and `policy/release-policy.yml`. Check those out separately as
+`trusted` and keep metadata, raw/final evidence and policy digest bound to that
+base and the full PR head. Use the current verified workflow checkout
+(`bootstrap`) for the resolver, handoff validators, disposition collection and
+`publish-check.mjs`, with its own built evidence-core validator. Never execute
+an older base's publication scripts: they may lack current source-attempt or
+handoff guards. Analysis bootstraps from `github.workflow_sha`, not a frozen
+PR base. No evidence schema field or policy threshold is changed by this split.
 
 This requires the already-pinned GitHub REST API `2026-03-10`, which
 [returns HTTP 200 and native run details](https://docs.github.com/en/rest/about-the-rest-api/breaking-changes?apiVersion=2026-03-10)
@@ -252,14 +274,14 @@ Analysis uses only explicit dispatch, so resumed GitHub completion propagation
 cannot duplicate its publication. Analysis attempt and live PR metadata/body
 are checked again at artifact handoff and before check/comment writes.
 
-Deploy all changed controller scripts, shared validators, and the three
-Publisher/Disposition/Revalidate workflow definitions together through a
+Deploy all changed controller scripts, shared validators, and all four
+Analysis/Publisher/Disposition/Revalidate workflow definitions together through a
 human-reviewed protected-base change. Local regression tests are not a live
 rollout: demonstrate metadata, authorized comment changes, periodic/expiry
-refresh, and overlapping-run behavior after that deployment before claiming
-those controls verified. Previously observed successful bot Analysis without
-Publisher is an unresolved live gap until the new path is demonstrated; its
-service-level cause is not established.
+refresh (including unchanged older PR bases), and overlapping-run behavior after that deployment before claiming
+those controls verified. Demonstrate both owner and controller publication
+ingresses natively; local tests alone do not establish GitHub completion
+propagation or effective permissions.
 
 For owner-controlled recovery on an existing installation, re-read the live
 head and run a **new Analysis** from the actual default branch, using the

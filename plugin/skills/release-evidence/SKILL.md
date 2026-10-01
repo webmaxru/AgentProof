@@ -44,6 +44,8 @@ guess, abbreviate, or copy identity from model prose or the mutable canvas.
    edited-away, or deleted state.
 7. For assembly, one final evidence document and one or more trusted
    `review-fragment` documents for the same immutable subject.
+8. Independently resolved current default-branch name and workflow revision,
+   separate from the PR policy base, plus native source run IDs and attempts.
 
 Never invent an actor permission, timestamp, workflow URL, finding, reviewer
 note, or digest.
@@ -55,6 +57,10 @@ note, or digest.
   merge refs, and 64-character SHA-256 values in commit-SHA fields.
 - Require `baseSha != headSha`, `policy.baseSha == baseSha`, and every finding
   and reviewer-note `sourceSha == headSha`.
+- Do not require the PR policy base to equal the current workflow SHA. An
+  unchanged older PR base is valid; a base changing during analysis is not.
+  Resolve current workflow code from native repository/default-ref state,
+  never from producer metadata or the PR head.
 - A disposition is current only when its `boundHeadSha` equals the live
   40-character head SHA. Older SHAs are history and never effective.
 - Resolve the base and head through GitHub immediately before analysis, after
@@ -81,6 +87,12 @@ Resolve the live PR through GitHub. In the authoritative workflow, check out:
 
 - trusted analyzer/evaluator and policy from the protected base SHA; and
 - the untrusted subject from the exact head SHA.
+
+Resolve and verify the current default-branch workflow revision separately.
+Use that current checkout for orchestration, disposition collection, metadata
+handoff and publication, including its evidence-core validator. Do not run an
+older PR base's publication scripts or substitute current policy for the
+PR-base policy. An old base must not bypass current attempt/controller guards.
 
 Run subject analysis with no secrets, no persisted credentials, and read-only
 repository/PR access. Never execute PR-controlled package scripts with a
@@ -217,6 +229,14 @@ successful Analysis and artifact identity. Never merely widen an accepted
 event string, invent a completion event, infer an Analysis from the latest run,
 or ignore changed attempts or PR body/head.
 
+For dispatched Analysis, native `run.head_sha` must equal the independently
+resolved workflow revision, not `metadata.baseSha`. A `pull_request_target`
+run instead reports the PR head in native `head_sha`; retain that trigger's
+native PR/artifact association checks. Re-read the native repository's default
+branch identity and ref tip at handoff and before writes. If either changes,
+leave the gate blocking and obtain new current-revision analysis through the
+authorized workflow; do not update frozen subject branches as a workaround.
+
 An external read-only consumer does not have authentic runner context or
 necessarily access to dispatch inputs. It may reuse `validateNativePublisherRun`
 with native records and an independently trusted workflow revision, run ID and
@@ -224,6 +244,11 @@ attempt. That verifies Publisher identity only, not completion, a passing gate,
 or independently observed dispatch inputs. Do not synthesize an event or
 `GITHUB_*` context to call the workflow-specific validator; keep unavailable
 source-linkage evidence explicit.
+
+`resolveTrustedWorkflowRevision({ repository, expectedSha })` can independently
+check the native default Git ref using GET-only access. Supply freshly obtained
+repository metadata; reusing its old `default_branch` value is not a fresh
+default-branch identity check. An expected SHA is a comparison, not authority.
 
 If dispatch details are unavailable, a wait expires, or no validated Publisher
 finishes, retain the blocking/pending result and escalate to an owner. The owner

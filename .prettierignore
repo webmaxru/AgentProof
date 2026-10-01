@@ -2,9 +2,7 @@ node_modules
 coverage
 .impeccable
 packages/*/dist
-sample-repo/dist
 plugin/extensions/evidence-board/dist
 plugin/extensions/evidence-board/extension.mjs
 package-lock.json
-hackathon-2026/fallback
 packages/evidence-cli/tests/fixtures/retention/malformed.yml

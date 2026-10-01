@@ -1,5 +1,5 @@
 import { cp, lstat, mkdir, rm, symlink, writeFile } from "node:fs/promises";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { AgentProofError } from "@agentproof/evidence-core";
 
@@ -15,7 +15,7 @@ const EXCLUDED_DIRECTORY_NAMES = new Set([
 
 export interface CollectorWorkspace {
   readonly root: string;
-  readonly samplePath: string;
+  readonly appPath: string;
   readonly configPath: string;
   readonly testReportPath: string;
   readonly coverageReportPath: string;
@@ -31,7 +31,6 @@ function generatedVitestConfig(coverageDirectory: string): string {
         coverage: {
           provider: "v8",
           include: ["src/**/*.ts"],
-          exclude: ["src/server.ts"],
           reporter: ["json-summary"],
           reportsDirectory: coverageDirectory,
         },
@@ -48,13 +47,26 @@ export async function prepareCollectorWorkspace(
   trustedNodeModulesPath: string,
 ): Promise<CollectorWorkspace> {
   const collectorRoot = resolve(collectorDirectoryPath);
+  const overlaps = (root: string, candidate: string): boolean => {
+    const difference = relative(root, candidate);
+    return (
+      difference === "" ||
+      (!difference.startsWith(`..${sep}`) && difference !== ".." && !isAbsolute(difference))
+    );
+  };
+  if (overlaps(source.root, collectorRoot) || overlaps(collectorRoot, source.root)) {
+    throw new AgentProofError(
+      "AP_COLLECTOR_WORKSPACE_ERROR",
+      "Collector workspace must be outside the subject repository and cannot contain it.",
+    );
+  }
   const stagedRoot = join(collectorRoot, "repository");
-  const stagedSample =
+  const stagedApp =
     source.logicalPath === "" ? stagedRoot : join(stagedRoot, ...source.logicalPath.split("/"));
   try {
     await rm(collectorRoot, { recursive: true, force: true });
-    await mkdir(dirname(stagedSample), { recursive: true });
-    await cp(source.absolutePath, stagedSample, {
+    await mkdir(dirname(stagedApp), { recursive: true });
+    await cp(source.absolutePath, stagedApp, {
       dereference: false,
       errorOnExist: true,
       filter: async (candidate) => {
@@ -87,7 +99,7 @@ export async function prepareCollectorWorkspace(
     await writeFile(configPath, generatedVitestConfig(coverageDirectory), "utf8");
     return {
       root: collectorRoot,
-      samplePath: stagedSample,
+      appPath: stagedApp,
       configPath,
       testReportPath,
       coverageReportPath: join(coverageDirectory, "coverage-summary.json"),

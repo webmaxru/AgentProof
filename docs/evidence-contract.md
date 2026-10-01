@@ -125,9 +125,15 @@ npm run agentproof -- evaluate --evidence <raw-json> --policy <yml> --dispositio
 npm run agentproof -- assemble --fragments <one-final-json> <review-fragment-json...> --output <assembled-json>
 ```
 
-`analyze` accepts either trusted PR metadata (including `samplePath`) and runs
+`analyze` accepts either trusted PR metadata (including the optional `appPath`,
+defaulting to the repository root) and runs
 bounded Vitest coverage plus `npm audit` itself, or explicit report-source
-metadata. `evaluate` always writes valid final evidence when evaluation
+metadata. The legacy `samplePath` alias remains accepted; conflicting aliases
+are rejected. Application selection never changes the repository-root audit
+lockfile. See the [CLI contract](../packages/evidence-cli/README.md) for trusted
+configuration and staging limits.
+
+`evaluate` always writes valid final evidence when evaluation
 completes and exits `0` for a successful gate, `2` for a blocking gate, or `1`
 for an input/engine error. `assemble` requires exactly one final evidence
 document and at least one review fragment; mixed identity or SHA inputs fail.

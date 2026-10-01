@@ -19,7 +19,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 300,
-      "pattern": "^(?![\\\\/])(?![A-Za-z]:)(?!.*(?:^|[\\\\/])\\.\\.(?:[\\\\/]|$)).+$"
+      "pattern": "^(?![\\\\/])(?![A-Za-z]:)(?!.*\\u0000)(?!.*(?:^|[\\\\/])\\.\\.(?:[\\\\/]|$)).+$"
     },
     "httpUrl": {
       "type": "string",
@@ -120,9 +120,14 @@
         "baseSha": { "$ref": "#/$defs/sha" },
         "headRef": { "type": "string", "minLength": 1, "maxLength": 255 },
         "headSha": { "$ref": "#/$defs/sha" },
+        "appPath": {
+          "allOf": [{ "$ref": "#/$defs/relativePath" }],
+          "default": "."
+        },
         "samplePath": {
           "allOf": [{ "$ref": "#/$defs/relativePath" }],
-          "default": "sample-repo"
+          "deprecated": true,
+          "description": "Legacy alias for appPath. If both are supplied, runtime validation requires equal values."
         }
       }
     },

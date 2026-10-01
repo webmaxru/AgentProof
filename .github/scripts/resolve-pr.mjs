@@ -8,6 +8,7 @@ import {
   repositoryFromEnvironment,
   setOutput,
 } from "./github-api.mjs";
+import { APPLICATION_PATH } from "./workflow-helpers.mjs";
 
 const repository = repositoryFromEnvironment();
 const event = await readEvent();
@@ -63,7 +64,7 @@ const metadata = {
   baseSha,
   headRef: pullRequest.head?.ref,
   headSha,
-  samplePath: "sample-repo",
+  appPath: APPLICATION_PATH,
 };
 
 await mkdir(dirname(metadataPath), { recursive: true });

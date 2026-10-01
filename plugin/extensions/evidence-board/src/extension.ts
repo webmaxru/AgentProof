@@ -191,7 +191,7 @@ async function loadSampleDocument(): Promise<EvidenceDocument> {
     return sampleDocument;
   }
   const serialized = await readFile(
-    new URL("../artifacts/sample-evidence.json", import.meta.url),
+    new URL("../artifacts/contract-fixture.json", import.meta.url),
     "utf8",
   );
   sampleDocument = parseEvidenceDocument(JSON.parse(serialized) as unknown);

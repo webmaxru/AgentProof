@@ -83,9 +83,24 @@ describe("stable CLI surface", () => {
     };
     expect(parseAnalyzeMetadata(identity)).toMatchObject({
       pullRequestBody: "",
-      samplePath: "sample-repo",
+      appPath: ".",
     });
-    expect(() => parseAnalyzeMetadata({ ...identity, samplePath: "../sample-repo" })).toThrow();
+    expect(parseAnalyzeMetadata({ ...identity, appPath: "services/api" })).toMatchObject({
+      appPath: "services/api",
+    });
+    expect(parseAnalyzeMetadata({ ...identity, samplePath: "services/api" })).toMatchObject({
+      appPath: "services/api",
+    });
+    expect(
+      parseAnalyzeMetadata({ ...identity, appPath: "services/api", samplePath: "services/api" }),
+    ).toMatchObject({ appPath: "services/api" });
+    expect(() =>
+      parseAnalyzeMetadata({ ...identity, appPath: ".", samplePath: "services/api" }),
+    ).toThrow();
+    for (const appPath of ["../app", "/app", "C:\\app", "C:app", "app\\..\\other", "app\0"]) {
+      expect(() => parseAnalyzeMetadata({ ...identity, appPath })).toThrow();
+      expect(() => parseAnalyzeMetadata({ ...identity, samplePath: appPath })).toThrow();
+    }
     expect(() => parseAnalyzeMetadata({ ...identity, unexpected: true })).toThrow();
   });
 });

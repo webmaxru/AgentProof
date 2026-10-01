@@ -3,11 +3,9 @@ coverage/
 !packages/evidence-cli/tests/fixtures/coverage/
 !packages/evidence-cli/tests/fixtures/coverage/*.json
 packages/*/dist/
-sample-repo/dist/
 *.tsbuildinfo
 .env
 .env.*
 !.env.example
 .agentproof/
 agentproof-evidence-*.json
-hackathon-2026/fallback/*.mp4

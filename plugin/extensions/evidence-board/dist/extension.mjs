@@ -104,7 +104,7 @@ async function loadSampleDocument() {
     if (sampleDocument !== undefined) {
         return sampleDocument;
     }
-    const serialized = await readFile(new URL("../artifacts/sample-evidence.json", import.meta.url), "utf8");
+    const serialized = await readFile(new URL("../artifacts/contract-fixture.json", import.meta.url), "utf8");
     sampleDocument = parseEvidenceDocument(JSON.parse(serialized));
     return sampleDocument;
 }

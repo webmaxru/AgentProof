@@ -6,16 +6,16 @@
   "success": true,
   "testResults": [
     {
-      "name": "tests/expenses.test.ts",
+      "name": "tests/authorization.test.ts",
       "assertionResults": [
         {
-          "title": "creates a synthetic expense",
-          "fullName": "expense API creates a synthetic expense",
+          "title": "creates a synthetic record",
+          "fullName": "application creates a synthetic record",
           "status": "passed"
         },
         {
           "title": "allows an approver",
-          "fullName": "expense API allows an approver",
+          "fullName": "application allows an approver",
           "status": "passed"
         }
       ]

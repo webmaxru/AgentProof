@@ -12,7 +12,7 @@ import {
 } from "../dist/reducer.js";
 
 const sample = JSON.parse(
-  await readFile(new URL("../artifacts/sample-evidence.json", import.meta.url), "utf8"),
+  await readFile(new URL("../artifacts/contract-fixture.json", import.meta.url), "utf8"),
 );
 const now = new Date("2026-09-02T12:00:00.000Z");
 

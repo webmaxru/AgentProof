@@ -1,8 +1,7 @@
 # Replace the reviewer entry with the release-reviewer team before enabling
 # required code-owner review in a customer repository.
-/.github/ @webmaxru
-/policy/ @webmaxru
-/packages/evidence-core/ @webmaxru
-/packages/evidence-cli/ @webmaxru
-/plugin/ @webmaxru
-/templates/ @webmaxru
+/.github/ @webmaxru @vibeprogrammer
+/policy/ @webmaxru @vibeprogrammer
+/packages/evidence-core/ @webmaxru @vibeprogrammer
+/packages/evidence-cli/ @webmaxru @vibeprogrammer
+/plugin/ @webmaxru @vibeprogrammer

@@ -32,6 +32,7 @@ import {
   validateCompletedAnalysisRun,
   validateDispatchedAnalysis,
   validateEvidenceHandoff,
+  validateNativePublisherRun,
   validatePublisherRun,
   validateRulesetPayload,
 } from "./workflow-helpers.mjs";
@@ -361,6 +362,65 @@ test("publisher native identity is bound to the protected default branch for bot
       const fixture = publisherFixture(eventName);
       mutate(fixture);
       assert.throws(() => validatePublisherRun(fixture));
+    }
+  }
+});
+
+test("read-only consumers validate native Publisher identity without inventing event or runner context", () => {
+  for (const eventName of ["workflow_run", "workflow_dispatch"]) {
+    const { run, workflow, repository } = publisherFixture(eventName);
+    const input = {
+      run,
+      workflow,
+      repository,
+      expectedRunId: 500,
+      expectedRunAttempt: 1,
+      expectedHeadSha: BASE_SHA,
+    };
+    assert.deepEqual(validateNativePublisherRun(input), { runId: 500, runAttempt: 1 });
+    const mutations = [
+      (value) => {
+        value.expectedRunId = 501;
+      },
+      (value) => {
+        value.expectedRunAttempt = 2;
+      },
+      (value) => {
+        value.expectedHeadSha = HEAD_SHA;
+      },
+      (value) => {
+        value.expectedHeadSha = undefined;
+      },
+      (value) => {
+        value.run.event = "push";
+      },
+      (value) => {
+        value.run.path = ANALYSIS_WORKFLOW_PATH;
+      },
+      (value) => {
+        value.run.workflow_id += 1;
+      },
+      (value) => {
+        value.workflow.state = "disabled_manually";
+      },
+      (value) => {
+        value.run.repository = { id: 999, full_name: "other/repo" };
+      },
+      (value) => {
+        value.run.head_repository = { id: 999, full_name: "other/repo" };
+      },
+      (value) => {
+        value.run.head_branch = "feature";
+      },
+      (value) => {
+        value.repository.default_branch = undefined;
+        value.run.head_branch = undefined;
+      },
+    ];
+    for (const mutate of mutations) {
+      const modified = structuredClone(input);
+      mutate(modified);
+      assert.throws(() => validateNativePublisherRun(modified));
     }
   }
 });

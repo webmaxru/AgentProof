@@ -319,38 +319,65 @@ export function validateAnalysisRun({ event, ...options }) {
   return validated;
 }
 
-export function validatePublisherRun({ eventName, event, run, workflow, repository, context }) {
+// Identity only; expectedHeadSha is the trusted workflow revision, not the PR head.
+export function validateNativePublisherRun({
+  run,
+  workflow,
+  repository,
+  expectedRunId,
+  expectedRunAttempt,
+  expectedHeadSha,
+}) {
   invariant(
-    ["workflow_run", "workflow_dispatch"].includes(eventName) && run?.event === eventName,
+    ["workflow_run", "workflow_dispatch"].includes(run?.event),
     "Publisher event is not an allowed trigger",
   );
-  validateWorkflowRunIdentity({
+  const identity = validateWorkflowRunIdentity({
     run,
     workflow,
     repository,
-    expectedRunId: assertPositiveInteger(context.runId, "publisher run id"),
-    expectedRunAttempt: assertPositiveInteger(context.runAttempt, "publisher run attempt"),
+    expectedRunId: assertPositiveInteger(expectedRunId, "publisher run id"),
+    expectedRunAttempt: assertPositiveInteger(expectedRunAttempt, "publisher run attempt"),
     name: PUBLISH_WORKFLOW_NAME,
     path: PUBLISH_WORKFLOW_PATH,
   });
-  const defaultRef = `refs/heads/${repository.default_branch}`;
   invariant(
-    run.head_branch === repository.default_branch &&
-      context.ref === defaultRef &&
-      context.workflowRef === `${repository.full_name}/${PUBLISH_WORKFLOW_PATH}@${defaultRef}` &&
+    typeof repository.default_branch === "string" &&
+      repository.default_branch.length > 0 &&
+      run.head_branch === repository.default_branch &&
       run.head_repository?.id === repository.id &&
       sameRepository(run.head_repository?.full_name, repository.full_name),
     "Publisher must run from this repository's protected default branch",
   );
   invariant(
-    assertSha(context.sha, "publisher context SHA") === run.head_sha,
-    "Publisher context and native run revisions do not match",
+    assertSha(expectedHeadSha, "expected publisher workflow SHA") === run.head_sha,
+    "Publisher native run does not match the trusted workflow revision",
+  );
+  return identity;
+}
+
+export function validatePublisherRun({ eventName, event, run, workflow, repository, context }) {
+  const identity = validateNativePublisherRun({
+    run,
+    workflow,
+    repository,
+    expectedRunId: context.runId,
+    expectedRunAttempt: context.runAttempt,
+    expectedHeadSha: context.sha,
+  });
+  invariant(run.event === eventName, "Publisher event does not match the native run");
+  const defaultRef = `refs/heads/${repository.default_branch}`;
+  invariant(
+    context.ref === defaultRef &&
+      context.workflowRef === `${repository.full_name}/${PUBLISH_WORKFLOW_PATH}@${defaultRef}`,
+    "Publisher context must identify the protected default-branch workflow",
   );
   invariant(
     event?.repository?.id === repository.id &&
       sameRepository(event.repository.full_name, repository.full_name),
     "Publisher event repository does not match",
   );
+  return identity;
 }
 
 export function validateDispatchedAnalysis({ event, ...options }) {

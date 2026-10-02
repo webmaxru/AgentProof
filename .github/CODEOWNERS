@@ -6,3 +6,7 @@
 /packages/evidence-cli/ @webmaxru @vibeprogrammer
 /plugin/ @webmaxru @vibeprogrammer
 /templates/ @webmaxru @vibeprogrammer
+/package.json @webmaxru @vibeprogrammer
+/package-lock.json @webmaxru @vibeprogrammer
+/tsconfig.base.json @webmaxru @vibeprogrammer
+/.npmrc @webmaxru @vibeprogrammer

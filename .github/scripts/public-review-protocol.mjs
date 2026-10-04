@@ -19,10 +19,13 @@ import {
   openProtocolTransport,
 } from "./public-review-protocol-transport.mjs";
 import { cleanupOwnedRuntime } from "./public-review-cleanup.mjs";
+import { createCredentialOwnerVerifier } from "./public-review-credential.mjs";
 
 export const PROTOCOL_STATE_ADAPTER = "experimental-protocol-3-state-only-v1";
 export const PROTOCOL_CONNECT_ADAPTER = "experimental-protocol-3-connect-diagnostics-v1";
 export const PROTOCOL_AUTH_ADAPTER = "experimental-protocol-3-auth-diagnostics-v1";
+export const PROTOCOL_CREDENTIAL_STATE_ADAPTER =
+  "experimental-protocol-3-credential-bound-state-v1";
 export const MAX_CONNECT_DIAGNOSTICS_BYTES = 4096;
 export const MAX_AUTH_DIAGNOSTICS_BYTES = 4096;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -185,6 +188,17 @@ function verifyAuth(value, expectedLogin) {
     "Native authentication must explicitly match the expected GitHub identity and explicit credential source.",
   );
   return { login: value.login, host: value.host, authType: value.authType };
+}
+
+function verifyCredentialBoundAuth(value, expectedLogin) {
+  requireState(
+    exactKeys(value, ["isAuthenticated", "host", "authType"], ["login", "statusMessage"]) &&
+      value.isAuthenticated === true &&
+      ["github.com", "https://github.com"].includes(value.host) &&
+      ["env", "token"].includes(value.authType) &&
+      (!Object.hasOwn(value, "login") || value.login === expectedLogin),
+    "Credential-bound state requires native authentication, allowed host/source, and no invalid or mismatched native login.",
+  );
 }
 
 export function projectAuthResponse(message, fingerprint, expectedId, expectedLogin) {
@@ -667,11 +681,22 @@ export function observeCopilotProtocol3Auth(options, dependencies) {
   return observeCopilotProtocol3(options, dependencies, false, true);
 }
 
+export function observeCopilotProtocol3CredentialBoundState(options, dependencies) {
+  return observeCopilotProtocol3(options, dependencies, false, false, true);
+}
+
 async function observeCopilotProtocol3(
   options,
-  { spawnNative, temporaryParent = tmpdir(), inheritedEnvironment = process.env, timeoutMs } = {},
+  {
+    spawnNative,
+    temporaryParent = tmpdir(),
+    inheritedEnvironment = process.env,
+    timeoutMs,
+    requestCredentialOwner,
+  } = {},
   connectOnly,
   authOnly = false,
+  credentialBound = false,
 ) {
   const setupDeadline = performance.now() + PROTOCOL_DEADLINE_MS;
   requireState(
@@ -718,7 +743,9 @@ async function observeCopilotProtocol3(
       ? PROTOCOL_CONNECT_ADAPTER
       : authOnly
         ? PROTOCOL_AUTH_ADAPTER
-        : PROTOCOL_STATE_ADAPTER,
+        : credentialBound
+          ? PROTOCOL_CREDENTIAL_STATE_ADAPTER
+          : PROTOCOL_STATE_ADAPTER,
     profileVersion: PUBLIC_REVIEW_PROFILE_VERSION,
     profileSha256: options.profileSha256,
     executableSha256: options.executableSha256,
@@ -731,6 +758,7 @@ async function observeCopilotProtocol3(
     stateOnly: true,
     modelInventoryStatus: "unknown",
     reviewStatus: "blocked",
+    ...(credentialBound ? { credentialBoundIdentity: true } : {}),
   };
   let runtimeRoot;
   let runtimeIdentity;
@@ -758,6 +786,21 @@ async function observeCopilotProtocol3(
       typeof env.COPILOT_GITHUB_TOKEN === "string" && env.COPILOT_GITHUB_TOKEN.trim().length > 0,
       "Trusted launcher must supply explicit native authentication; no login fallback is permitted.",
     );
+    const verifyCredentialOwner = credentialBound
+      ? createCredentialOwnerVerifier(env, options.expectedLogin, requestCredentialOwner)
+      : undefined;
+    let nativeTimeout = timeoutMs;
+    if (credentialBound) {
+      requireState(
+        timeoutMs === undefined ||
+          (Number.isInteger(timeoutMs) && timeoutMs >= 1 && timeoutMs <= PROTOCOL_DEADLINE_MS),
+        "Credential-bound state must retain the existing native deadline bound.",
+      );
+      nativeTimeout = Math.floor(
+        Math.min(timeoutMs ?? PROTOCOL_DEADLINE_MS, setupDeadline - performance.now()),
+      );
+      requireState(nativeTimeout >= 1, "Credential-bound state setup exhausted its deadline.");
+    }
     const observer = observeNotifications(options.sessionId, name);
     receipt.events = observer.counts;
     transport = openProtocolTransport(
@@ -770,19 +813,29 @@ async function observeCopilotProtocol3(
         onConnectResponse: (message, fingerprint, expectedId) => {
           receipt.connect = projectConnectResponse(message, fingerprint, expectedId);
         },
-        onAuthResponse: authOnly
-          ? (message, fingerprint, expectedId) => {
-              receipt.authStatus = projectAuthResponse(
-                message,
-                fingerprint,
-                expectedId,
-                options.expectedLogin,
-              );
-            }
-          : undefined,
+        onAuthResponse:
+          authOnly || credentialBound
+            ? (message, fingerprint, expectedId) => {
+                const projection = projectAuthResponse(
+                  message,
+                  fingerprint,
+                  expectedId,
+                  options.expectedLogin,
+                );
+                if (authOnly) receipt.authStatus = projection;
+                else {
+                  receipt.nativeAuthentication ??= [];
+                  requireState(
+                    receipt.nativeAuthentication.length < 2,
+                    "Credential-bound state cannot repeat native authentication observations.",
+                  );
+                  receipt.nativeAuthentication.push(projection);
+                }
+              }
+            : undefined,
         connectOnly,
         authOnly,
-        timeoutMs,
+        timeoutMs: nativeTimeout,
       },
       spawnNative,
     );
@@ -808,12 +861,24 @@ async function observeCopilotProtocol3(
         "Native status differs from the pinned protocol/version.",
       );
       receipt.cliVersion = status.version;
-      const authentication = verifyAuth(
-        await transport.request("auth.getStatus", {}),
-        options.expectedLogin,
-      );
+      const nativeAuthentication = await transport.request("auth.getStatus", {});
+      let authentication;
+      if (credentialBound) {
+        verifyCredentialBoundAuth(nativeAuthentication, options.expectedLogin);
+        if (transport.error) throw transport.error;
+        receipt.credentialOwner = {
+          ...(await verifyCredentialOwner(() =>
+            Math.min(
+              transport.remainingMilliseconds(),
+              Math.max(0, setupDeadline - performance.now()),
+            ),
+          )),
+          tokenBinding: "same-immutable-environment-forwarded-to-owned-cli",
+        };
+        if (transport.error) throw transport.error;
+      } else authentication = verifyAuth(nativeAuthentication, options.expectedLogin);
       if (!authOnly) {
-        receipt.auth = authentication;
+        if (!credentialBound) receipt.auth = authentication;
         const created = await transport.request(
           "session.create",
           sessionConfiguration(options.sessionId, profile, body, physicalWorkspace, home),
@@ -834,7 +899,9 @@ async function observeCopilotProtocol3(
           JSON.stringify(before) === JSON.stringify(after),
           "Native profile or initialization state changed during observation.",
         );
-        verifyAuth(await transport.request("auth.getStatus", {}), options.expectedLogin);
+        const finalAuthentication = await transport.request("auth.getStatus", {});
+        if (credentialBound) verifyCredentialBoundAuth(finalAuthentication, options.expectedLogin);
+        else verifyAuth(finalAuthentication, options.expectedLogin);
         requireState(
           observer.counts.sessionStarts === 1,
           "Native session-start proof was not observed.",
@@ -854,7 +921,9 @@ async function observeCopilotProtocol3(
     } else {
       receipt.state = observedState;
       await transport.request("runtime.shutdown", {});
-      receipt.status = "state-only-observed-review-blocked";
+      receipt.status = credentialBound
+        ? "credential-bound-state-observed-review-blocked"
+        : "state-only-observed-review-blocked";
     }
   } catch (error) {
     failure =
@@ -919,7 +988,9 @@ async function observeCopilotProtocol3(
           ? "protocol-connect-receipt.json"
           : authOnly
             ? "protocol-auth-receipt.json"
-            : "protocol-state-receipt.json",
+            : credentialBound
+              ? "protocol-credential-state-receipt.json"
+              : "protocol-state-receipt.json",
       ),
       `${JSON.stringify(receipt, null, 2)}\n`,
       { flag: "wx", mode: 0o600 },

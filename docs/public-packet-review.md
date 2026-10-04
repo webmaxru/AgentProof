@@ -404,6 +404,81 @@ model-inventory proof. A missing/mismatched native authentication or identity
 remains a genuine blocker. Each real observation requires separate authorization,
 and no corrected native retry or model turn follows it.
 
+## Experimental credential-bound identity state mode
+
+`observeCopilotProtocol3CredentialBoundState(options)` is a separately named
+experimental state-only path, not a fallback in `observeCopilotProtocol3State`
+or `observeCopilotProtocol3Auth`. Their strict `verifyAuth` remains unchanged.
+The genuine `5856537` auth-only failure remains blocked: native authentication,
+host, and source checks passed, but the optional native login was absent.
+No saved-account label, caller assertion, older receipt, or synthesized native
+field can satisfy the new mode.
+
+The credential-selection basis is the same pinned public SDK snapshot:
+[`types.ts` lines 447-460](https://github.com/github/copilot-sdk/blob/ef04633cc84e4ba8e79888a39259ca276f5de732/nodejs/src/types.ts#L447-L460)
+defines explicit-token priority and says `useLoggedInUser: false` uses only
+explicit tokens, not stored OAuth or `gh` authentication.
+[`client.ts`](https://github.com/github/copilot-sdk/blob/ef04633cc84e4ba8e79888a39259ca276f5de732/nodejs/src/client.ts#L2944-L3076)
+copies that exact token into `COPILOT_SDK_AUTH_TOKEN`, selects that name with
+`--auth-token-env`, emits `--no-auto-login`, and passes the same environment to
+the owned child process. The existing sealed runner selects the different name
+`COPILOT_GITHUB_TOKEN` through the same generic selector mechanism; the variable
+names are not asserted to be identical. It forwards only that credential value,
+excludes alternate credential variables,
+disables keytar, and isolates an empty home. This contract basis is not a new
+claim of native identity telemetry or live compatibility.
+
+Only this new mode freezes the exact environment passed to the owned CLI and
+captures its immutable token value in a private, one-use verifier. After native
+authentication/host/source/shape checks, the trusted host makes one fresh fixed
+HTTPS `GET https://api.github.com/user`, authenticating with that **same** value.
+It does not invoke `gh`, read a credential store, switch accounts, acquire or
+refresh a credential, use another token, or accept a supplied proof. A valid
+expected login, positive safe-integer user ID, and `type: "User"` must match the
+[authenticated-user API contract](https://docs.github.com/en/rest/users/users#get-the-authenticated-user).
+All other public/private account fields are discarded.
+
+Only a genuinely absent optional native `login` may rely on this separately
+attributed credential-owner proof. A present mismatched, null, malformed, or
+empty native login still blocks before the HTTP request. Native
+`isAuthenticated: true`, an allowed public host, source `env` or `token`, and the
+otherwise unchanged closed shape are required both before and after native
+state reads. Even when a matching native login is present, this mode still
+performs its fresh credential-owner check. It never writes the API login into a
+native response.
+
+The fixed endpoint, method, API version, and headers have no caller-configurable
+destination or redirect path. HTTP 200 with uncompressed UTF-8 JSON is required;
+redirects, errors, unsupported headers, incomplete bodies, invalid identities,
+wrong owners, and exhausted deadlines fail with fixed safe errors. Response
+headers are capped at 8 KiB and body bytes at 32 KiB before JSON parsing. The
+HTTP operation has at most 10 seconds within the remaining original
+observation/native budget, including streaming, with no retry. This mode also
+accounts for setup time when starting the unchanged native deadline. Host
+debugging/preload settings that could expose HTTP credentials are rejected.
+The existing general GitHub request helper is deliberately not reused: its
+unbounded bodies and native error details do not meet this narrow contract.
+
+`protocol-credential-state-receipt.json` uses
+`experimental-protocol-3-credential-bound-state-v1`. Its
+`nativeAuthentication` entries retain the original bounded strict diagnostics,
+including absent native login and the strict predicates that would still fail.
+`credentialOwner` separately attributes expected-owner/User matching to the
+GitHub authenticated-user API and describes the same immutable launch-value
+binding. It includes only fixed metadata, byte count, booleans, and an
+observation time, not raw HTTP/account bodies, login/ID values, private fields,
+credentials, or credential/body fingerprints. Credentials never enter process
+or RPC arguments, prompts, logs, or capture files.
+
+All native profile, extension/MCP, initialized-catalog, event, zero-call,
+deadline, physical-workspace, and observed-exit cleanup checks remain in force.
+No user/model/tool/task execution is added. Even a complete synthetic fixture
+returns `credential-bound-state-observed-review-blocked`: model-specific
+inventory remains `unknown`, review remains `blocked`, and App isolation is
+unproven. This proof basis requires separate review and authorization before
+any real state-only observation. No new native process or live API proof is
+established by its implementation tests.
+
 ## Deployment status and limitations
 
 Automations remain blocked under every existing

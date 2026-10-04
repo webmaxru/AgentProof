@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import { realpathSync } from "node:fs";
 import {
   lstat,
@@ -15,6 +16,8 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { PassThrough } from "node:stream";
+import { setImmediate } from "node:timers";
 import { sha256 } from "@agentproof/evidence-core";
 import { SESSION_ID } from "./public-review-fixtures.mjs";
 import {
@@ -26,10 +29,15 @@ import {
 import { encodeProtocolMessage } from "./public-review-protocol-transport.mjs";
 import { cleanupOwnedRuntime } from "./public-review-cleanup.mjs";
 import {
+  createCredentialOwnerVerifier,
+  MAX_CREDENTIAL_RESPONSE_BYTES,
+} from "./public-review-credential.mjs";
+import {
   MAX_CONNECT_DIAGNOSTICS_BYTES,
   MAX_AUTH_DIAGNOSTICS_BYTES,
   observeCopilotProtocol3Auth,
   observeCopilotProtocol3Connect,
+  observeCopilotProtocol3CredentialBoundState,
   observeCopilotProtocol3State,
   projectConnectResponse,
   projectAuthResponse,
@@ -66,6 +74,691 @@ async function setup(t) {
     },
   };
 }
+
+// Synthetic identity projections of the public GitHub /user schema, not native API proof.
+function credentialHttpFixture({
+  body = { login: "fixture-operator", id: 17, type: "User" },
+  statusCode = 200,
+  headers = { "content-type": "application/json; charset=utf-8" },
+  complete = true,
+  requestError = false,
+  responseError = false,
+  earlyClose = false,
+  aborted = false,
+  hang = false,
+  beforeResponse,
+  chunks,
+} = {}) {
+  const calls = [];
+  const requestNative = (url, options, onResponse) => {
+    const outgoing = new EventEmitter();
+    let response;
+    outgoing.destroyed = false;
+    outgoing.destroy = () => {
+      if (outgoing.destroyed) return outgoing;
+      outgoing.destroyed = true;
+      response?.destroy();
+      setImmediate(() => outgoing.emit("close"));
+      return outgoing;
+    };
+    outgoing.end = () => {
+      setImmediate(() => {
+        if (outgoing.destroyed) return;
+        if (requestError) {
+          outgoing.emit("error", new Error("synthetic-private-native-error"));
+          return;
+        }
+        beforeResponse?.();
+        response = new PassThrough();
+        response.statusCode = statusCode;
+        response.headers = headers;
+        response.complete = complete;
+        onResponse(response);
+        if (response.destroyed) return;
+        if (responseError) return response.destroy(new Error("synthetic-private-native-error"));
+        if (earlyClose) return response.emit("close");
+        if (aborted) return response.emit("aborted");
+        if (hang) return;
+        const data = chunks ?? [
+          Buffer.isBuffer(body)
+            ? body
+            : Buffer.from(typeof body === "string" ? body : JSON.stringify(body)),
+        ];
+        for (const chunk of data) {
+          if (response.destroyed) return;
+          response.write(chunk);
+        }
+        if (!response.destroyed) response.end();
+      });
+    };
+    calls.push({ url, options, outgoing });
+    return outgoing;
+  };
+  return { calls, requestNative };
+}
+
+test("credential owner HTTP proof uses only the frozen explicit token and fixed endpoint", async () => {
+  const environment = { COPILOT_GITHUB_TOKEN: "synthetic-original-token" };
+  const http = credentialHttpFixture({
+    body: {
+      login: "fixture-operator",
+      id: 17,
+      type: "User",
+      "synthetic-private-key": "synthetic-private-value",
+      email: "synthetic-private-email",
+    },
+  });
+  const verify = createCredentialOwnerVerifier(environment, "fixture-operator", http.requestNative);
+  assert.equal(Object.isFrozen(environment), true);
+  assert.throws(() => {
+    environment.COPILOT_GITHUB_TOKEN = "synthetic-replacement-token";
+  }, TypeError);
+  const proof = await verify(() => 1000);
+  assert.equal(http.calls.length, 1);
+  const { url, options } = http.calls[0];
+  assert.equal(url, "https://api.github.com/user");
+  assert.equal(options.method, "GET");
+  assert.equal(options.agent, false);
+  assert.equal(options.rejectUnauthorized, true);
+  assert.equal(options.maxHeaderSize, 8192);
+  assert.equal(options.headers.Authorization, "Bearer synthetic-original-token");
+  assert.equal(options.headers["X-GitHub-Api-Version"], "2026-03-10");
+  assert.equal(options.headers["Cache-Control"], "no-cache");
+  assert.equal(options.headers.Connection, "close");
+  assert.equal(proof.authority, "github-rest-authenticated-user");
+  assert.equal(proof.expectedLoginMatch, true);
+  assert.equal(proof.userTypeMatch, true);
+  assert.equal(proof.userIdValid, true);
+  assert.deepEqual(Object.keys(proof).sort(), [
+    "authority",
+    "expectedLoginMatch",
+    "observedAt",
+    "responseBytes",
+    "userIdValid",
+    "userTypeMatch",
+  ]);
+  assert.equal(http.calls[0].outgoing.destroyed, true);
+  for (const privateValue of [
+    "synthetic-original-token",
+    "fixture-operator",
+    "synthetic-private-key",
+    "synthetic-private-value",
+    "synthetic-private-email",
+  ])
+    assert.equal(JSON.stringify(proof).includes(privateValue), false);
+  await assert.rejects(
+    verify(() => 1000),
+    { code: "AP_REVIEW_CREDENTIAL_REUSED" },
+  );
+  assert.equal(http.calls.length, 1);
+});
+
+for (const [label, options, code] of [
+  [
+    "redirect",
+    { statusCode: 302, headers: { location: "https://example.invalid/private" } },
+    "HTTP",
+  ],
+  ["not authenticated", { statusCode: 401, body: "synthetic-private-native-error" }, "HTTP"],
+  ["forbidden", { statusCode: 403 }, "HTTP"],
+  ["cached response", { statusCode: 304 }, "HTTP"],
+  ["server failure", { statusCode: 500 }, "HTTP"],
+  ["missing content type", { headers: {} }, "HEADERS"],
+  ["wrong content type", { headers: { "content-type": "text/html" } }, "HEADERS"],
+  ["array content type", { headers: { "content-type": ["application/json"] } }, "HEADERS"],
+  [
+    "compressed response",
+    { headers: { "content-type": "application/json", "content-encoding": "gzip" } },
+    "HEADERS",
+  ],
+  ["null headers", { headers: null }, "HEADERS"],
+  [
+    "oversized declared body",
+    {
+      headers: {
+        "content-type": "application/json",
+        "content-length": String(MAX_CREDENTIAL_RESPONSE_BYTES + 1),
+      },
+    },
+    "BYTES",
+  ],
+  [
+    "malformed declared length",
+    {
+      headers: { "content-type": "application/json", "content-length": "synthetic-private-header" },
+    },
+    "BYTES",
+  ],
+  [
+    "inconsistent declared length",
+    { headers: { "content-type": "application/json", "content-length": "1" } },
+    "TRUNCATED",
+  ],
+  ["request error", { requestError: true }, "TRANSPORT"],
+  ["response error", { responseError: true }, "TRANSPORT"],
+  ["early response close", { earlyClose: true }, "TRUNCATED"],
+  ["aborted response", { aborted: true }, "TRUNCATED"],
+  ["incomplete response", { complete: false }, "TRUNCATED"],
+  ["malformed JSON", { body: "synthetic-private-native-error{" }, "JSON"],
+  ["invalid UTF-8", { body: Buffer.from([0xc3, 0x28]) }, "JSON"],
+  ["null identity", { body: null }, "SCHEMA"],
+  ["array identity", { body: [] }, "SCHEMA"],
+  ["missing login", { body: { id: 17, type: "User" } }, "SCHEMA"],
+  ["null login", { body: { login: null, id: 17, type: "User" } }, "SCHEMA"],
+  [
+    "invalid login",
+    { body: { login: "synthetic-private-login/url", id: 17, type: "User" } },
+    "SCHEMA",
+  ],
+  ["missing user id", { body: { login: "fixture-operator", type: "User" } }, "SCHEMA"],
+  ["string user id", { body: { login: "fixture-operator", id: "17", type: "User" } }, "SCHEMA"],
+  ["nonpositive user id", { body: { login: "fixture-operator", id: 0, type: "User" } }, "SCHEMA"],
+  [
+    "unsafe user id",
+    { body: { login: "fixture-operator", id: Number.MAX_SAFE_INTEGER + 1, type: "User" } },
+    "SCHEMA",
+  ],
+  ["non-user identity", { body: { login: "fixture-operator", id: 17, type: "Bot" } }, "SCHEMA"],
+  ["missing identity type", { body: { login: "fixture-operator", id: 17 } }, "SCHEMA"],
+  ["wrong owner", { body: { login: "synthetic-wrong-owner", id: 17, type: "User" } }, "OWNER"],
+  ["case-mismatched owner", { body: { login: "Fixture-Operator", id: 17, type: "User" } }, "OWNER"],
+]) {
+  test(`credential owner HTTP rejects ${label} without exposing response or credential data`, async () => {
+    const http = credentialHttpFixture(options);
+    const verify = createCredentialOwnerVerifier(
+      { COPILOT_GITHUB_TOKEN: "synthetic-private-token" },
+      "fixture-operator",
+      http.requestNative,
+    );
+    await assert.rejects(
+      verify(() => 1000),
+      (error) => {
+        assert.equal(error.code, `AP_REVIEW_CREDENTIAL_${code}`);
+        assert.equal(`${error.message}${JSON.stringify(error)}`.includes("synthetic-"), false);
+        return true;
+      },
+    );
+    assert.equal(http.calls.length, 1);
+    assert.equal(http.calls[0].outgoing.destroyed, true);
+  });
+}
+
+test("credential owner enforces exact byte ceilings before JSON parsing", async () => {
+  const json = JSON.stringify({ login: "fixture-operator", id: 17, type: "User" });
+  for (const excess of [0, 1]) {
+    const http = credentialHttpFixture({
+      chunks: [
+        Buffer.from(" ".repeat(MAX_CREDENTIAL_RESPONSE_BYTES - Buffer.byteLength(json))),
+        Buffer.from(`${json}${" ".repeat(excess)}`),
+      ],
+    });
+    const verify = createCredentialOwnerVerifier(
+      { COPILOT_GITHUB_TOKEN: "synthetic-token" },
+      "fixture-operator",
+      http.requestNative,
+    );
+    if (excess)
+      await assert.rejects(
+        verify(() => 1000),
+        { code: "AP_REVIEW_CREDENTIAL_BYTES" },
+      );
+    else assert.equal((await verify(() => 1000)).responseBytes, MAX_CREDENTIAL_RESPONSE_BYTES);
+  }
+});
+
+test("credential owner enforces remaining time, including stalled and late responses", async () => {
+  for (const invalidBudget of [0, -1, NaN, Infinity, 180_001]) {
+    const http = credentialHttpFixture();
+    const verify = createCredentialOwnerVerifier(
+      { COPILOT_GITHUB_TOKEN: "synthetic-token" },
+      "fixture-operator",
+      http.requestNative,
+    );
+    await assert.rejects(
+      verify(() => invalidBudget),
+      { code: "AP_REVIEW_CREDENTIAL_DEADLINE" },
+    );
+    assert.equal(http.calls.length, 0);
+  }
+  const stalled = credentialHttpFixture({ hang: true });
+  const verify = createCredentialOwnerVerifier(
+    { COPILOT_GITHUB_TOKEN: "synthetic-token" },
+    "fixture-operator",
+    stalled.requestNative,
+  );
+  await assert.rejects(
+    verify(() => 25),
+    { code: "AP_REVIEW_CREDENTIAL_TIMEOUT" },
+  );
+  assert.equal(stalled.calls[0].outgoing.destroyed, true);
+  let remaining = 1000;
+  const late = credentialHttpFixture({
+    beforeResponse: () => {
+      remaining = 0;
+    },
+  });
+  const verifyLate = createCredentialOwnerVerifier(
+    { COPILOT_GITHUB_TOKEN: "synthetic-token" },
+    "fixture-operator",
+    late.requestNative,
+  );
+  await assert.rejects(
+    verifyLate(() => remaining),
+    { code: "AP_REVIEW_CREDENTIAL_TIMEOUT" },
+  );
+  assert.equal(late.calls[0].outgoing.destroyed, true);
+});
+
+test("credential owner refuses unsafe input, implicit sources, and host diagnostics before any request", (t) => {
+  let requested = false;
+  const noRequest = () => {
+    requested = true;
+    throw new Error("Unexpected request");
+  };
+  const accessor = {};
+  Object.defineProperty(accessor, "COPILOT_GITHUB_TOKEN", {
+    get() {
+      throw new Error("Credential getter must not run");
+    },
+  });
+  for (const environment of [
+    null,
+    {},
+    [],
+    accessor,
+    { COPILOT_GITHUB_TOKEN: "" },
+    { COPILOT_GITHUB_TOKEN: "synthetic-token\nprivate-header" },
+    { COPILOT_GITHUB_TOKEN: "x".repeat(4097) },
+    { COPILOT_GITHUB_TOKEN: "synthetic-token", GH_TOKEN: "synthetic-other-token" },
+    { COPILOT_GITHUB_TOKEN: "synthetic-token", GITHUB_TOKEN: "synthetic-other-token" },
+    { COPILOT_GITHUB_TOKEN: "synthetic-token", COPILOT_SDK_AUTH_TOKEN: "synthetic-other-token" },
+  ]) {
+    assert.throws(() => createCredentialOwnerVerifier(environment, "fixture-operator", noRequest), {
+      code: "AP_REVIEW_CREDENTIAL_INPUT",
+    });
+  }
+  const previous = process.env.NODE_DEBUG;
+  t.after(() => {
+    if (previous === undefined) delete process.env.NODE_DEBUG;
+    else process.env.NODE_DEBUG = previous;
+  });
+  process.env.NODE_DEBUG = "synthetic-private-debug-setting";
+  assert.throws(
+    () =>
+      createCredentialOwnerVerifier(
+        { COPILOT_GITHUB_TOKEN: "synthetic-token" },
+        "fixture-operator",
+        noRequest,
+      ),
+    { code: "AP_REVIEW_CREDENTIAL_DIAGNOSTICS" },
+  );
+  assert.equal(requested, false);
+});
+
+for (const nativeLoginPresent of [false, true]) {
+  test(`credential-bound state keeps ${nativeLoginPresent ? "present" : "absent"} native login separate from same-token API proof`, async (t) => {
+    const { root, options, dependencies } = await setup(t);
+    const fixture = protocolStateFixture();
+    if (!nativeLoginPresent) delete fixture["auth.getStatus"].login;
+    const child = stateFixtureChild(fixture);
+    let launchEnvironment;
+    const http = credentialHttpFixture({
+      beforeResponse: () => {
+        dependencies.inheritedEnvironment.COPILOT_GITHUB_TOKEN = "synthetic-later-token";
+      },
+    });
+    const receipt = await observeCopilotProtocol3CredentialBoundState(options, {
+      ...dependencies,
+      requestCredentialOwner: http.requestNative,
+      spawnNative: (executable, args, processOptions) => {
+        launchEnvironment = processOptions.env;
+        assert.equal(Object.isFrozen(launchEnvironment), true);
+        dependencies.inheritedEnvironment.COPILOT_GITHUB_TOKEN = "synthetic-unrelated-token";
+        assert.throws(() => {
+          launchEnvironment.COPILOT_GITHUB_TOKEN = "synthetic-replacement-token";
+        }, TypeError);
+        assert.deepEqual(args.slice(args.indexOf("--auth-token-env")), [
+          "--auth-token-env",
+          "COPILOT_GITHUB_TOKEN",
+        ]);
+        assert.ok(args.includes("--no-auto-login"));
+        return child;
+      },
+    });
+    assert.equal(http.calls.length, 1);
+    assert.equal(
+      http.calls[0].options.headers.Authorization,
+      `Bearer ${launchEnvironment.COPILOT_GITHUB_TOKEN}`,
+    );
+    assert.equal(launchEnvironment.COPILOT_GITHUB_TOKEN, "synthetic-fixture-native-auth");
+    assert.equal(launchEnvironment.GH_TOKEN, undefined);
+    assert.equal(launchEnvironment.GITHUB_TOKEN, undefined);
+    assert.equal(receipt.adapter, "experimental-protocol-3-credential-bound-state-v1");
+    assert.equal(receipt.status, "credential-bound-state-observed-review-blocked");
+    assert.equal(receipt.modelInventoryStatus, "unknown");
+    assert.equal(receipt.reviewStatus, "blocked");
+    assert.equal(Object.hasOwn(receipt, "auth"), false);
+    assert.equal(receipt.credentialOwner.authority, "github-rest-authenticated-user");
+    assert.equal(receipt.credentialOwner.expectedLoginMatch, true);
+    assert.equal(
+      receipt.credentialOwner.tokenBinding,
+      "same-immutable-environment-forwarded-to-owned-cli",
+    );
+    assert.equal(receipt.nativeAuthentication.length, 2);
+    for (const native of receipt.nativeAuthentication) {
+      assert.equal(native.login.present, nativeLoginPresent);
+      assert.equal(native.login.type, nativeLoginPresent ? "string" : "missing");
+      assert.equal(native.login.exactExpectedMatch, nativeLoginPresent);
+      assert.deepEqual(
+        native.failedPredicates,
+        nativeLoginPresent ? [] : ["result_shape", "exact_expected_login"],
+      );
+    }
+    assert.equal(receipt.native.exitObserved, true);
+    assert.equal(receipt.native.streamsClosed, true);
+    assert.equal(receipt.cleanup.status, "removed-after-exit");
+    assert.equal(receipt.events.modelEvents, 0);
+    assert.equal(receipt.events.toolOrPermissionEvents, 0);
+    assert.ok(!JSON.stringify(child.messages).includes("synthetic-fixture-native-auth"));
+    const saved = await readFile(
+      join(options.captureDirectory, "protocol-credential-state-receipt.json"),
+      "utf8",
+    );
+    assert.equal(saved.includes("fixture-operator"), false);
+    assert.equal(saved.includes("synthetic-fixture-native-auth"), false);
+    assert.deepEqual((await readdir(root)).sort(), ["capture"]);
+  });
+}
+
+for (const [label, mutate] of [
+  [
+    "wrong login",
+    (auth) => {
+      auth.login = "synthetic-other-user";
+    },
+  ],
+  [
+    "null login",
+    (auth) => {
+      auth.login = null;
+    },
+  ],
+  [
+    "numeric login",
+    (auth) => {
+      auth.login = 17;
+    },
+  ],
+  [
+    "object login",
+    (auth) => {
+      auth.login = { private: "synthetic-private-value" };
+    },
+  ],
+  [
+    "false authentication",
+    (auth) => {
+      auth.isAuthenticated = false;
+    },
+  ],
+  [
+    "missing authentication",
+    (auth) => {
+      delete auth.isAuthenticated;
+    },
+  ],
+  [
+    "missing host",
+    (auth) => {
+      delete auth.host;
+    },
+  ],
+  [
+    "private host",
+    (auth) => {
+      auth.host = "https://example.invalid/private";
+    },
+  ],
+  [
+    "missing source",
+    (auth) => {
+      delete auth.authType;
+    },
+  ],
+  [
+    "stored-user source",
+    (auth) => {
+      auth.authType = "user";
+    },
+  ],
+  [
+    "gh source",
+    (auth) => {
+      auth.authType = "gh-cli";
+    },
+  ],
+  [
+    "unknown source",
+    (auth) => {
+      auth.authType = "synthetic-private-source";
+    },
+  ],
+  [
+    "extra result field",
+    (auth) => {
+      auth["synthetic-private-key"] = "synthetic-private-value";
+    },
+  ],
+]) {
+  test(`credential-bound state rejects ${label} before checking credential owner or creating a session`, async (t) => {
+    const { options, dependencies } = await setup(t);
+    const fixture = protocolStateFixture();
+    delete fixture["auth.getStatus"].login;
+    mutate(fixture["auth.getStatus"]);
+    const child = stateFixtureChild(fixture);
+    const http = credentialHttpFixture();
+    await assert.rejects(
+      observeCopilotProtocol3CredentialBoundState(options, {
+        ...dependencies,
+        spawnNative: () => child,
+        requestCredentialOwner: http.requestNative,
+      }),
+      { code: "AP_REVIEW_PROTOCOL_STATE_REJECTED" },
+    );
+    assert.equal(http.calls.length, 0);
+    assert.deepEqual(
+      child.messages.map(({ method }) => method),
+      ["connect", "status.get", "auth.getStatus"],
+    );
+    const saved = await readFile(
+      join(options.captureDirectory, "protocol-credential-state-receipt.json"),
+      "utf8",
+    );
+    assert.equal(saved.includes("synthetic-private"), false);
+  });
+}
+
+test("credential-bound state rejects wrong token owner without a native-login substitution", async (t) => {
+  const { options, dependencies } = await setup(t);
+  const fixture = protocolStateFixture();
+  delete fixture["auth.getStatus"].login;
+  const child = stateFixtureChild(fixture);
+  const http = credentialHttpFixture({
+    body: {
+      login: "synthetic-wrong-owner",
+      id: 19,
+      type: "User",
+      private: "synthetic-private-value",
+    },
+  });
+  await assert.rejects(
+    observeCopilotProtocol3CredentialBoundState(options, {
+      ...dependencies,
+      spawnNative: () => child,
+      requestCredentialOwner: http.requestNative,
+    }),
+    { code: "AP_REVIEW_CREDENTIAL_OWNER" },
+  );
+  assert.equal(http.calls.length, 1);
+  assert.deepEqual(
+    child.messages.map(({ method }) => method),
+    ["connect", "status.get", "auth.getStatus"],
+  );
+  const saved = await readFile(
+    join(options.captureDirectory, "protocol-credential-state-receipt.json"),
+    "utf8",
+  );
+  const receipt = JSON.parse(saved);
+  assert.equal(receipt.status, "blocked");
+  assert.equal(receipt.credentialOwner, undefined);
+  assert.equal(receipt.nativeAuthentication[0].login.present, false);
+  assert.equal(saved.includes("synthetic-"), false);
+});
+
+test("credential-bound state still rejects changed final authentication and missing native inventory", async (t) => {
+  for (const finalAuthChanges of [false, true]) {
+    const { options, dependencies } = await setup(t);
+    const fixture = protocolStateFixture();
+    delete fixture["auth.getStatus"].login;
+    if (!finalAuthChanges) fixture["session.tools.getCurrentMetadata"].tools = null;
+    let authCalls = 0;
+    const child = stateFixtureChild(fixture, (message, result) => {
+      if (message.method === "auth.getStatus" && ++authCalls === 2 && finalAuthChanges)
+        result.login = null;
+      return result;
+    });
+    const http = credentialHttpFixture();
+    await assert.rejects(
+      observeCopilotProtocol3CredentialBoundState(options, {
+        ...dependencies,
+        spawnNative: () => child,
+        requestCredentialOwner: http.requestNative,
+      }),
+      { code: "AP_REVIEW_PROTOCOL_STATE_REJECTED" },
+    );
+    assert.equal(http.calls.length, 1);
+    assert.equal(
+      child.messages.some(({ method }) => method === "runtime.shutdown"),
+      false,
+    );
+  }
+});
+
+test("existing strict and diagnostic modes never use credential-owner fallback", async (t) => {
+  for (const observe of [observeCopilotProtocol3State, observeCopilotProtocol3Auth]) {
+    const { options, dependencies } = await setup(t);
+    const fixture = protocolStateFixture();
+    delete fixture["auth.getStatus"].login;
+    const child = stateFixtureChild(fixture);
+    const http = credentialHttpFixture();
+    await assert.rejects(
+      observe(options, {
+        ...dependencies,
+        spawnNative: () => child,
+        requestCredentialOwner: http.requestNative,
+      }),
+      { code: "AP_REVIEW_PROTOCOL_STATE_REJECTED" },
+    );
+    assert.equal(http.calls.length, 0);
+    assert.deepEqual(
+      child.messages.map(({ method }) => method),
+      ["connect", "status.get", "auth.getStatus"],
+    );
+  }
+});
+
+test("credential-bound state does not issue an owner request after a latched native permission failure", async (t) => {
+  const { options, dependencies } = await setup(t);
+  const fixture = protocolStateFixture();
+  delete fixture["auth.getStatus"].login;
+  const child = fakeProtocolChild((message, native) => {
+    native.stdout.write(
+      encodeProtocolMessage({
+        jsonrpc: "2.0",
+        id: message.id,
+        result: fixture[message.method],
+      }),
+    );
+    if (message.method === "auth.getStatus") {
+      native.stdout.write(
+        encodeProtocolMessage({
+          jsonrpc: "2.0",
+          id: 999,
+          method: "permission.request",
+          params: {},
+        }),
+      );
+    }
+  });
+  const http = credentialHttpFixture();
+  await assert.rejects(
+    observeCopilotProtocol3CredentialBoundState(options, {
+      ...dependencies,
+      spawnNative: () => child,
+      requestCredentialOwner: http.requestNative,
+    }),
+    { code: "AP_REVIEW_PROTOCOL_REVERSE_REQUEST" },
+  );
+  assert.equal(http.calls.length, 0);
+  assert.deepEqual(
+    child.messages.map(({ method }) => method),
+    ["connect", "status.get", "auth.getStatus"],
+  );
+});
+
+test("credential-bound HTTP wait shares the native deadline and cannot create a session afterward", async (t) => {
+  const { options, dependencies } = await setup(t);
+  const fixture = protocolStateFixture();
+  delete fixture["auth.getStatus"].login;
+  const child = stateFixtureChild(fixture);
+  const http = credentialHttpFixture({ hang: true });
+  await assert.rejects(
+    observeCopilotProtocol3CredentialBoundState(options, {
+      ...dependencies,
+      spawnNative: () => child,
+      requestCredentialOwner: http.requestNative,
+      timeoutMs: 50,
+    }),
+    (error) => ["AP_REVIEW_CREDENTIAL_TIMEOUT", "AP_REVIEW_PROTOCOL_DEADLINE"].includes(error.code),
+  );
+  assert.equal(http.calls.length, 1);
+  assert.equal(http.calls[0].outgoing.destroyed, true);
+  assert.deepEqual(
+    child.messages.map(({ method }) => method),
+    ["connect", "status.get", "auth.getStatus"],
+  );
+  const receipt = JSON.parse(
+    await readFile(
+      join(options.captureDirectory, "protocol-credential-state-receipt.json"),
+      "utf8",
+    ),
+  );
+  assert.equal(receipt.status, "blocked");
+  assert.equal(receipt.credentialOwner, undefined);
+  assert.equal(receipt.reviewStatus, "blocked");
+});
+
+test("credential-bound state rejects invalid native budgets rather than normalizing them", async (t) => {
+  for (const timeoutMs of [0, -1, NaN, 180_001]) {
+    const { options, dependencies } = await setup(t);
+    let launched = false;
+    const http = credentialHttpFixture();
+    await assert.rejects(
+      observeCopilotProtocol3CredentialBoundState(options, {
+        ...dependencies,
+        timeoutMs,
+        requestCredentialOwner: http.requestNative,
+        spawnNative: () => {
+          launched = true;
+          throw new Error("Unexpected native launch");
+        },
+      }),
+      { code: "AP_REVIEW_PROTOCOL_STATE_REJECTED" },
+    );
+    assert.equal(launched, false);
+    assert.equal(http.calls.length, 0);
+  }
+});
 
 test("documented initialized state remains state-only and cannot stand in for model inventory", async (t) => {
   const { root, profile, options, dependencies } = await setup(t);

@@ -179,6 +179,112 @@ Repeat freshness checks immediately before publication, assembly, or board
 loading. A seed export is not a completed review transcript. Never rebind an
 older export or fragment to a new head or artifact.
 
+## Experimental protocol-3 state-only observation
+
+`.github/scripts/public-review-protocol.mjs` exports
+`observeCopilotProtocol3State(options)`. This is a **separate experimental
+state-only adapter**, not a fallback from the JSONL verifier, a working review
+runner, or an App isolation fix. It has no `session.send`, resume, tool-execute,
+model selection, review input, or publishing route. The legacy verifier, its
+refusals, and the failed single `f2eab435` canary remain unchanged. In that
+canary, explicit disabled MCP entries were inactive facts, not an empty MCP
+inventory; missing initialization/selection proof and `UNSAFE_TOOL_BOUNDARY`
+independently blocked review.
+
+The reviewed wire contract is the public
+[`github/copilot-sdk` snapshot `ef04633cc84e4ba8e79888a39259ca276f5de732`](https://github.com/github/copilot-sdk/tree/ef04633cc84e4ba8e79888a39259ca276f5de732/nodejs/src),
+paired with CLI `1.0.92-3` and released SDK `1.0.17-preview.3`.
+`client.ts`, `types.ts`, `generated/rpc.ts`, and
+`generated/session-events.ts` define the inspected calls and schemas.
+The SDK's `connect` handshake is version-pinned, not a promise of a stable
+cross-version protocol. The host implements only the default UTF-8
+`Content-Length` stdio framing used by `vscode-jsonrpc` `8.2.1`; it adds no SDK
+dependency, SDK patch, TCP connection, global installation, or plugin.
+
+Only these host-owned inputs are accepted:
+
+| Option                           | Required value                                                                                                                                |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `executable`, `executableSha256` | Absolute path and independently reviewed exact native executable digest; native connect/status must also report CLI `1.0.92-3`, protocol `3`. |
+| `profileSha256`, `specialist`    | Independently pinned full bytes of the current `0.3.0` public profile and `test`, `security`, or `policy`.                                    |
+| `sessionId`, `expectedLogin`     | Fresh UUIDv4 and exact expected public GitHub login, independently authenticated by the trusted launcher.                                     |
+| `captureDirectory`               | New absolute host-owned directory outside every physical Git ancestor; parent must exist. Existing captures are never overwritten.            |
+
+The trusted launcher supplies only `COPILOT_GITHUB_TOKEN` in the child
+environment, not in JSON, arguments, prompts, captures, or logs. The fixed
+`--auth-token-env` argument names that variable, never its value.
+The launcher must verify saved-native GitHub identity immediately before the
+authorized observation; the adapter additionally requires explicit native
+authentication/host/login before session creation and after its state reads.
+It neither reads a credential store nor changes accounts. No repository
+package scripts should run with that credential.
+
+The fixed headless/stdio launch retains the empty allow/exclude intersection,
+shell/write denials, disabled built-in MCPs, no automatic login/update,
+secret-environment marking, no inherited instructions, and no remote/export
+route. Session creation additionally disables config discovery, file hooks,
+skills, session-store/embedding-cache persistence, memory, infinite sessions,
+host Git operations, and extension requests. An isolated home and physically
+resolved outside-checkout workspace contain only the staged public profile.
+The inline custom agent uses its exact public authored body, empty tools/MCPs/
+skills, and `infer: false`; no model/provider override is supplied.
+Removing the system message's environment-context section does not replace
+guardrails or establish that a future composed prompt is safe.
+
+The host registers native event/reverse-request handlers before the first RPC,
+then connects/authenticates, creates one fresh session, and calls documented
+`session.tools.initializeAndValidate`. That method can be a no-op:
+`session.tools.getCurrentMetadata` returning `null` still blocks. It reads
+`session.agent.getCurrent`, `session.agent.list` with public authored prompt
+metadata, `session.extensions.list`, `session.mcp.list`, initialized tool
+metadata, and `session.skills.list` twice without a turn. Exact selected
+identity/public body bytes, explicit empty initialized catalog/skills,
+unchanged state, and explicit disabled/absent extension and MCP state are
+required. Missing MCP host state, active/pending/failed/auth-required servers,
+missing fields, cursor/truncation fields, or unsupported shapes block. Explicit
+disabled servers remain recorded as disabled, never erased or relabeled.
+An empty extension list is a native response, not an assumption.
+
+This is **catalog-only initialization evidence**. The public SDK does not
+guarantee the per-model `tool_count`, `tools`, and `tools_truncated` proof
+required for a reviewer turn. Opaque internal prompt-cache baselines are not
+inspected or promoted into such proof. There is no user/clock envelope to
+verify because this API cannot send a user message. Even a fully observed
+state-only run returns `state-only-observed-review-blocked`,
+`modelInventoryStatus: unknown`, and `reviewStatus: blocked`.
+Unknown instruction expansion, missing model inventory/truncation, or either
+model refusal must still block any future review adapter. Every assistant,
+model, user, tool, permission, elicitation, or unsupported event blocks this
+state-only run; an apparent answer never makes it a review success.
+
+The directly owned `ChildProcess` has one 180-second monotonic deadline,
+8 KiB header bound, 4 MiB frame and cumulative stdout-plus-stderr ceiling
+before JSON parsing, 24,000-byte outgoing frame limit, at most 32 sequential
+requests, at most 128 notifications, and **zero** permitted reverse requests.
+Unknown/duplicate/unmatched frames, malformed UTF-8/JSON, partial frames,
+native RPC errors, any stderr, or nonzero exit fail closed without retry or
+handshake downgrade. Shutdown acknowledges the documented void result, then
+the host closes stdin and observes actual native exit **and** stream closure
+before removing its owned runtime directory. A requested kill is not exit
+proof. Deadline expiry blocks; if exit or stream closure is unconfirmed, the
+host retains that directory instead of falsely reporting cleanup.
+
+`protocol-state-receipt.json` contains only allowlisted state/status metadata,
+observed event/RPC counts, host/native identities and timestamps, and hashes.
+Raw stdio, authored/native prompt payloads, full MCP host config, and native
+error text are not written to the capture. Stream hash byte counts distinguish
+a bounded prefix from a complete observed stream after a limit violation.
+Native-owned temporary files are removed only after confirmed exit; the
+receipt is immutable. The synthetic public-schema fixtures and real Node
+stdio lifecycle fixture are **not** live Copilot evidence.
+
+A separately authorized trusted host may invoke
+`await observeCopilotProtocol3State({ executable, executableSha256,
+profileSha256, specialist, sessionId, expectedLogin, captureDirectory })`.
+Do not add a request/prompt/evidence field or follow it with a model call.
+Unit success alone does not authorize even this state-only native observation,
+and a state-only result does not establish live review compatibility.
+
 ## Deployment status and limitations
 
 Automations remain blocked under every existing

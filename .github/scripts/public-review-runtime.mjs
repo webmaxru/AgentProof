@@ -369,6 +369,8 @@ async function requireNoGitAncestor(workspace) {
   return physicalWorkspace;
 }
 
+export { requireNoGitAncestor };
+
 function executeNative(executable, args, options) {
   return new Promise((resolve) => {
     execFile(

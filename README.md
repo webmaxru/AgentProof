@@ -130,6 +130,11 @@ are **deprecated and unsupported**. The legacy assembler is not a tool-free
 specialist. No live App/automation validation is implied by this repair or its
 synthetic tests; earlier failed candidates remain failures.
 
+The separate experimental protocol-3 adapter in the
+[packet integration guide](docs/public-packet-review.md#experimental-protocol-3-state-only-observation)
+can only observe initialized native state. It cannot send a model request;
+catalog-only results leave model inventory unknown and review blocked.
+
 **Automated specialist reviewers remain blocked** whenever the effective runtime
 exposes mutation, shell, secrets, deployment, or cross-repository capabilities.
 A narrowed tool picker or read-only prompt does not prove enforcement. The

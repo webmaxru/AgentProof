@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -350,7 +350,8 @@ export function verifyNativeZeroToolRun({
 }
 
 async function requireNoGitAncestor(workspace) {
-  for (let path = workspace; ; path = dirname(path)) {
+  const physicalWorkspace = await realpath(workspace);
+  for (let path = physicalWorkspace; ; path = dirname(path)) {
     let hasGit = false;
     try {
       await lstat(join(path, ".git"));
@@ -365,6 +366,7 @@ async function requireNoGitAncestor(workspace) {
     );
     if (dirname(path) === path) break;
   }
+  return physicalWorkspace;
 }
 
 function executeNative(executable, args, options) {
@@ -444,10 +446,10 @@ export async function runCopilotPublicPacket(options, execute = executeNative) {
   try {
     await mkdir(home, { recursive: true, mode: 0o700 });
     await mkdir(agentDirectory, { recursive: true });
-    await requireNoGitAncestor(workspace);
+    const physicalWorkspace = await requireNoGitAncestor(workspace);
     await writeFile(localProfile, profile, { flag: "wx" });
     await writeFile(join(captureDirectory, "request.json"), request, { flag: "wx" });
-    const processOptions = { cwd: workspace, env: zeroToolEnvironment(home) };
+    const processOptions = { cwd: physicalWorkspace, env: zeroToolEnvironment(home) };
     requireCondition(
       typeof processOptions.env.COPILOT_GITHUB_TOKEN === "string" &&
         processOptions.env.COPILOT_GITHUB_TOKEN.trim().length > 0,

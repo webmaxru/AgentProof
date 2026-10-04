@@ -102,8 +102,10 @@ The runner uses both `tools: []` and the native
 empty; `view` is not granted. Shell/write permissions are also denied. Built-in
 MCPs, inherited instructions, remote access/export, automatic updates, and
 interactive questions are disabled. A fresh isolated home and workspace avoid
-loading personal settings, plugins, and checkout context. A Git checkout anywhere
-above the temporary workspace blocks launch. No source tree is
+loading personal settings, plugins, and checkout context. The runner resolves the
+physical workspace path before checking every ancestor for a `.git` directory or
+worktree file, then launches with that same resolved path. A junction or symlink
+into a checkout subdirectory cannot bypass this check. No source tree is
 copied into that workspace. The native token is marked secret for child
 environment stripping and output redaction.
 
@@ -145,6 +147,9 @@ reviewer's closed input. Those temporary validations cannot alter the source
 document. Every scoped finding ID must appear once and the note must state
 `AP-FINDING-ID: pass|fail|unknown|exception` with its exact recorded state.
 Session link, timestamp, specialist, full SHAs, and both digests must match.
+Either refusal marker blocks the entire answer, even alongside otherwise valid
+JSON or in the trailing `Summary:` sentence. Parsed JSON strings are checked too,
+so Unicode escapes cannot hide `UNSAFE_TOOL_BOUNDARY` or `PUBLIC_PACKET_REJECTED`.
 
 Success returns `status: advisory-input-verified-not-published`, `input`, the
 public request/answer, and native verification details. It does **not** return a

@@ -32,6 +32,7 @@ import {
 
 const POLICY_PATH = "policy/release-policy.yml";
 const MAX_PUBLIC_SOURCE_BYTES = 64 * 1024;
+const REVIEW_REFUSAL_MARKERS = ["UNSAFE_TOOL_BOUNDARY", "PUBLIC_PACKET_REJECTED"];
 const INPUT_KEYS = [
   "baseSha",
   "evidenceArtifactSha256",
@@ -399,7 +400,7 @@ export function validatePublicReviewResponse({ response, request }) {
   requireCondition(
     typeof response === "string" &&
       Buffer.byteLength(response, "utf8") <= 8 * 1024 &&
-      !response.includes("UNSAFE_TOOL_BOUNDARY"),
+      !REVIEW_REFUSAL_MARKERS.some((marker) => response.includes(marker)),
     "Reviewer refused or exceeded the advisory output bound.",
     "AP_REVIEW_OUTPUT_REJECTED",
   );
@@ -417,6 +418,12 @@ export function validatePublicReviewResponse({ response, request }) {
   } catch {
     throw new AgentProofError("AP_REVIEW_OUTPUT_REJECTED", "Reviewer JSON is malformed.");
   }
+  const decodedInput = JSON.stringify(input);
+  requireCondition(
+    !REVIEW_REFUSAL_MARKERS.some((marker) => decodedInput.includes(marker)),
+    "Reviewer JSON contains a decoded refusal marker.",
+    "AP_REVIEW_OUTPUT_REJECTED",
+  );
   requireCondition(
     input &&
       JSON.stringify(Object.keys(input).sort()) === JSON.stringify(INPUT_KEYS) &&

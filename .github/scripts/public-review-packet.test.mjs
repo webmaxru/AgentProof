@@ -520,6 +520,36 @@ test("packet rejection, safe self-report, extra prose and malformed JSON never b
   }
 });
 
+function mixedRefusalResponse(request, marker, placement) {
+  const input = reviewInput(request);
+  if (placement === "trailing Summary") {
+    return reviewResponse(input).replace(/Summary: [^\r\n]*$/u, `Summary: ${marker}`);
+  }
+  input.reviewerNote.summary += `; ${marker}`;
+  const response = reviewResponse(input);
+  return placement === "escaped JSON note"
+    ? response.replace(
+        marker,
+        [...marker]
+          .map((character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`)
+          .join(""),
+      )
+    : response;
+}
+
+for (const marker of ["PUBLIC_PACKET_REJECTED", "UNSAFE_TOOL_BOUNDARY"]) {
+  for (const placement of ["trailing Summary", "JSON note", "escaped JSON note"]) {
+    test(`advisory output rejects refusal marker ${marker} in ${placement}`, async () => {
+      const fixture = await publicSourceFixture();
+      const response = mixedRefusalResponse(fixture.request, marker, placement);
+      if (placement === "escaped JSON note") assert.ok(!response.includes(marker));
+      assert.throws(() => validatePublicReviewResponse({ response, request: fixture.request }), {
+        code: "AP_REVIEW_OUTPUT_REJECTED",
+      });
+    });
+  }
+}
+
 async function runFixture(t, specialist = "test") {
   const priorToken = process.env.COPILOT_GITHUB_TOKEN;
   process.env.COPILOT_GITHUB_TOKEN = "synthetic-native-auth";
@@ -576,6 +606,48 @@ for (const specialist of ["test", "security", "policy"]) {
     assert.equal(paths.filter((path) => path === `${fixture.prefix}/pulls/7`).length, 4);
     assert.deepEqual(result.request.publicContent, fixture.publicContent);
     assert.equal(result.fragment, undefined);
+  });
+}
+
+for (const placement of ["trailing Summary", "escaped JSON note"]) {
+  test(`host preserves a mixed packet refusal in ${placement} without releasing advisory input`, async (t) => {
+    const { fixture, options, execute } = await runFixture(t);
+    let refusedResponse;
+    let nativeStream;
+    await assert.rejects(
+      reviewPublicPacket(options, {
+        request: nativeReader(fixture),
+        now,
+        execute: async (executable, args, processOptions) => {
+          if (args.includes("--version")) return execute(executable, args, processOptions);
+          const serialized = args.at(-1);
+          refusedResponse = mixedRefusalResponse(
+            JSON.parse(serialized),
+            "PUBLIC_PACKET_REJECTED",
+            placement,
+          );
+          nativeStream = nativeJsonl(
+            nativeEvents(serialized, refusedResponse, new Date().toISOString()),
+          );
+          return { exitCode: 0, stdout: nativeStream };
+        },
+      }),
+      { code: "AP_REVIEW_OUTPUT_REJECTED" },
+    );
+    const verification = JSON.parse(
+      await readFile(join(options.captureDirectory, "review-verification.json"), "utf8"),
+    );
+    const nativeReceipt = JSON.parse(
+      await readFile(join(options.captureDirectory, "runtime-receipt.json"), "utf8"),
+    );
+    assert.equal(verification.status, "blocked");
+    assert.equal(verification.errorCode, "AP_REVIEW_OUTPUT_REJECTED");
+    assert.equal(nativeReceipt.toolCalls, 0);
+    assert.equal(nativeReceipt.response, refusedResponse);
+    assert.equal(
+      await readFile(join(options.captureDirectory, "native.jsonl"), "utf8"),
+      nativeStream,
+    );
   });
 }
 

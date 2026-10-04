@@ -1,5 +1,15 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath,
+  rm,
+  symlink,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -555,3 +565,80 @@ test("a temporary workspace inside any checkout blocks before native execution",
     },
   );
 });
+
+for (const gitMarker of ["directory", "file", null]) {
+  const behavior =
+    gitMarker === null
+      ? "outside a checkout launches using its checked physical path"
+      : `into a checkout subdirectory with a .git ${gitMarker} blocks before execution`;
+  test(`temporary-root alias ${behavior}`, async (t) => {
+    const root = await mkdtemp(join(tmpdir(), "agentproof-alias-test-"));
+    const alias = join(root, "temporary-root-alias");
+    const saved = new Map(
+      ["TMPDIR", "TEMP", "TMP", "COPILOT_GITHUB_TOKEN"].map((key) => [key, process.env[key]]),
+    );
+    let aliasCreated = false;
+    t.after(async () => {
+      for (const [key, value] of saved) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+      if (aliasCreated) await unlink(alias);
+      await rm(root, { recursive: true, force: true });
+    });
+    const checkout = join(root, "synthetic-checkout");
+    const subdirectory = join(checkout, "temporary-files");
+    await mkdir(subdirectory, { recursive: true });
+    if (gitMarker === "directory") await mkdir(join(checkout, ".git"));
+    if (gitMarker === "file") {
+      await writeFile(join(checkout, ".git"), "SYNTHETIC WORKTREE CHECKOUT MARKER");
+    }
+    const sentinel = join(checkout, "keep.txt");
+    await writeFile(sentinel, "SYNTHETIC CHECKOUT CONTENT MUST SURVIVE");
+    await symlink(subdirectory, alias, process.platform === "win32" ? "junction" : "dir");
+    aliasCreated = true;
+    for (const key of ["TMPDIR", "TEMP", "TMP"]) process.env[key] = alias;
+    process.env.COPILOT_GITHUB_TOKEN = "synthetic-native-auth";
+    const executable = join(root, "synthetic-executable");
+    await writeFile(executable, "SYNTHETIC EXECUTABLE FIXTURE, NEVER EXECUTED");
+    const options = {
+      executable,
+      executableSha256: sha256(await readFile(executable)),
+      captureDirectory: join(root, "capture"),
+      specialist: "test",
+      sessionId: SESSION_ID,
+      request,
+    };
+    const invocations = [];
+    const execute = async (_executable, args, processOptions) => {
+      invocations.push({ cwd: processOptions.cwd, physical: await realpath(processOptions.cwd) });
+      return args.includes("--version")
+        ? { exitCode: 0, stdout: `GitHub Copilot CLI ${SUPPORTED_COPILOT_VERSION}.\n` }
+        : {
+            exitCode: 0,
+            stdout: nativeJsonl(
+              nativeEvents(request, "synthetic advisory response", new Date().toISOString()),
+            ),
+          };
+    };
+    if (gitMarker === null) {
+      const result = await runCopilotPublicPacket(options, execute);
+      assert.equal(result.status, "native-zero-tools-verified-advisory-output-only");
+      assert.equal(invocations.length, 2);
+      for (const invocation of invocations) assert.equal(invocation.cwd, invocation.physical);
+      assert.equal(invocations[0].cwd, invocations[1].cwd);
+    } else {
+      await assert.rejects(runCopilotPublicPacket(options, execute), {
+        code: "AP_REVIEW_WORKSPACE_UNSAFE",
+      });
+      assert.equal(invocations.length, 0);
+      const receipt = JSON.parse(
+        await readFile(join(options.captureDirectory, "runtime-receipt.json"), "utf8"),
+      );
+      assert.equal(receipt.status, "blocked");
+      assert.equal(receipt.errorCode, "AP_REVIEW_WORKSPACE_UNSAFE");
+    }
+    assert.deepEqual(await readdir(subdirectory), []);
+    assert.equal(await readFile(sentinel, "utf8"), "SYNTHETIC CHECKOUT CONTENT MUST SURVIVE");
+  });
+}

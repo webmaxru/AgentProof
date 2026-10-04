@@ -5,10 +5,11 @@ schema, or compliance baseline. Names and availability vary by GitHub plan and
 the current Copilot App. An enterprise administrator must translate the intent
 into approved live settings.
 
-AgentProof uses manually started installed reviewers only when their effective
-runtime is read-only. Historical automation trials exposed mutation, shell,
-and broader repository access despite narrowed selections. Automated specialists
-remain blocked until the current target runtime can exclude those capabilities.
+AgentProof `0.3.0` uses [tool-free public-packet specialists](public-packet-review.md)
+with a separate trusted native host. The broad `0.2.1` repository-reading App
+mode is deprecated and unsupported. Historical automation trials exposed
+mutation, shell, and broader repository access despite narrowed selections.
+Automated specialists remain blocked; CLI results do not prove App isolation.
 
 ## Layer 1: centrally managed App guardrails
 
@@ -25,21 +26,23 @@ remain blocked until the current target runtime can exclude those capabilities.
 Do not put tokens, tenant URLs, provider keys, customer identifiers, or private
 policy values in this repository or screenshots.
 
-## Layer 2: manual reviewer-session MVP
+## Layer 2: operator-started public-packet review
 
-For each AgentProof Test, Security, or Policy Reviewer session:
+For each AgentProof Public Packet Test, Security, or Policy Reviewer:
 
 - verify the installed plugin source and version;
-- start the exact installed custom reviewer manually, never **Default** or
-  another general-purpose profile as a substitute;
+- use the exact custom profile through the reviewed native host, never
+  **Default**, a legacy read-tool prompt, or another profile as a substitute;
 - scope the request to one repository, pull request, and current full head SHA;
-- keep the reviewer read-only, with no push, merge, approval, exception,
-  secrets, deployment, or cross-repository capability;
-- turn absent, malformed, unavailable, stale, or mixed evidence into `unknown`;
-  and
+- require zero callable tools, pinned native exclusions and complete native
+  zero-tool/zero-call observations; delegate source resolution to the trusted
+  GET-only host, not the model;
+- obtain operator approval for the exact bounded public synthetic content;
+- preserve recorded `unknown` findings; block absent, malformed, unavailable,
+  stale, or mixed packet inputs without inventing replacement findings; and
 - retain only approved, non-sensitive session/evidence references.
 
-A human controls publication, Evidence Assembler invocation, remediation,
+A human controls publication, deterministic assembly/board loading, remediation,
 exception decisions, approval, merge, and release.
 
 ## Layer 3: blocked personal automation experiment
@@ -113,8 +116,9 @@ independence.
 
 1. Confirm the effective enterprise settings using a non-production account.
 2. Install the exact reviewed plugin version through a confirmed flow.
-3. Exercise the three installed reviewers as manual, read-only sessions against
-   synthetic pull requests and current full head SHAs.
+3. Separately authorize and validate the three revised tool-free profiles
+   against public synthetic packets and current full head SHAs. Preserve
+   refusals and failures; unit fixtures are not live execution proof.
 4. Run the disposable permission canary before any reviewer automation. Verify
    custom-agent selection, picker scope, and the actual runtime inventory.
 5. Disable the experiment if it exposes edit, shell, push, merge, approval,

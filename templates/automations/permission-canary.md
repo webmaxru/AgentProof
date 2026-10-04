@@ -4,6 +4,13 @@
 > disposable safety test, not a reviewer automation and not
 > automation-as-code.
 
+This is the legacy repository-reading App negative control, not the `0.3.0`
+public-packet mode or permission to run another canary. Its old profile/picker
+assumptions are unsupported. The new mode requires zero callable tools and a
+separate native host verifier; model inventory prose and CLI results do not
+prove App isolation. Preserve earlier refusals without relabeling or retrying
+until pass. Every automation save gate remains mandatory.
+
 ## Purpose
 
 Prove the effective Copilot App PR-automation tool boundary before enabling any

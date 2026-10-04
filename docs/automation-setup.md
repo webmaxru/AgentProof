@@ -1,8 +1,9 @@
 # Reviewer sessions and automation permission gates
 
-AgentProof's reviewer path is manually started, isolated Test, Security, and
-Policy Reviewer sessions followed by a manually invoked Evidence Assembler.
-These sessions are advisory and must be effectively read-only. The committed
+AgentProof's `0.3.0` specialists use a separately enforced
+[tool-free public-evidence-packet host](public-packet-review.md). The legacy
+repository-reading manual App procedure and `0.2.1` profiles are deprecated and
+unsupported. Packet-mode CLI results do not prove App isolation. The committed
 automation templates are **blocked setup inputs**, not deployed reviewer
 automations or automation-as-code.
 
@@ -12,27 +13,34 @@ picker. Those results establish a limitation, not a safe current installation.
 Do not configure automated specialists until the actual target runtime can
 exclude those capabilities.
 
-## Manual reviewer setup
+## Public-packet host setup
 
-1. Install the exact reviewed plugin version from the approved source.
+1. Review the exact toolkit host code, plugin source, profile and native CLI versions.
 2. Wait for deterministic evidence for the current full PR head SHA.
-3. Review and confirm separate sessions using the installed Test, Security, and
-   Policy Reviewer profiles; do not substitute a general-purpose profile.
-4. Permit only necessary repository, PR, diff, check, policy, and same-SHA
-   artifact reads. Inspect the effective runtime, not only the picker.
-5. Cancel if mutation, shell, approval, exception, deployment, secrets, or
-   cross-repository capability remains. Read-only prompts alone cannot remove
-   those capabilities.
+3. Independently resolve native public evidence/policy in the trusted host and
+   obtain operator approval for the exact bounded public synthetic content.
+4. Use only the explicitly named Public Packet specialist with zero tools.
+   Native exclusions and native complete zero-tool/zero-call observations are
+   mandatory; a picker or model self-report is not enough.
+5. Stop if any callable tool, unsupported runtime, refusal, or missing native
+   observation remains. Do not grant read tools to repair a tool-free rejection.
 6. Preserve `pass`, `fail`, `unknown`, and `exception`. Missing, stale,
    malformed, or mixed-SHA evidence cannot support a pass.
-7. Run the Evidence Assembler manually after the three same-SHA fragments exist.
-   A new commit requires new evidence and review.
+7. The separate operator verifies public exports and current identity before
+   protected wrapping/assembly and board loading. Do not use the legacy
+   broad-tool assembler as an isolation shortcut. A new commit requires new
+   evidence and review.
 
 The plugin cannot approve, accept an exception, merge, or release. The Evidence
 Board is mutable coordination state. GitHub checks, comments, reviews,
 artifacts, and repository rules are authoritative.
 
 ## Automation save gate
+
+The following legacy read-tool gates remain mandatory for any future,
+separately designed App route. They are not sufficient to enable the new
+zero-tool profiles, and CLI packet tests cannot satisfy them. No automation is
+created or enabled by this repair; keep all unverified candidates blocked.
 
 The files under `templates/automations/` describe a future target. Do not save
 or enable a specialist automation unless every condition is verified:
@@ -58,6 +66,10 @@ without calling mutation tools. Any future bounded publisher needs its own
 explicitly reviewed design; do not grant the reviewer comment-write access.
 
 ## Permission-canary procedure
+
+This is the legacy App negative-control procedure, not a packet-mode launcher.
+Historical failures remain failures. A new profile/version needs separately
+authorized target-host validation, not repeated retries until it says safe.
 
 Use [the canary template](../templates/automations/permission-canary.md) only in a
 disposable, synthetic target:

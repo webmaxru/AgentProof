@@ -353,8 +353,10 @@ Exercise disposable PRs independently:
 6. A new commit invalidating previous evidence, dispositions, and approvals.
 7. Red-gate and missing-independent-review enforcement as separate cases.
 8. Overlapping runs unable to publish success for an obsolete head.
-9. Effective reviewer tools excluding mutation, shell, and cross-repository
-   capabilities; otherwise keep reviewer automations disabled.
+9. For `0.3.0` [public-packet specialists](public-packet-review.md), a separately
+   validated trusted host and complete native zero-tool/zero-call observations.
+   Legacy broad-tool App profiles are unsupported. Keep automations disabled
+   unless every independent App save gate is met; CLI results cannot prove it.
 10. Bot-origin metadata/comment/scheduled refresh reaching explicit Publisher,
     without duplicate publication or an indefinitely pending gate.
 

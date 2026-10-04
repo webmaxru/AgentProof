@@ -183,10 +183,24 @@ converted to success. Require a valid final artifact even when the gate blocks.
 
 ### 5. Add advisory review fragments
 
-Specialists review the same final evidence and immutable policy inputs. A
-trusted review-fragment wrapper must validate their bounded input and create the
-canonical fragment digest; never hand-forge a `review-fragment`. With the three
-expected fragments, run:
+Use only the separately enforced `public-evidence-packet-v1` host integration
+for `0.3.0` Public Packet specialists. They declare zero tools and cannot fetch,
+hash, execute, or independently check GitHub freshness. The trusted host must
+resolve public native identity/policy/artifact records, obtain approval for the
+exact bounded synthetic content, enforce native tool exclusion, and verify
+native zero-tool/zero-call telemetry and freshness. Model self-report is not a
+substitute. See `docs/public-packet-review.md`.
+
+The legacy repository-reading App profiles and automation prompts are
+deprecated and unsupported. Do not grant reads to a tool-free reviewer or
+substitute a general-purpose agent. Preserve refusals, including refusals with
+zero native tools; do not retry them until pass.
+
+The separate host must verify the actual public session export and current
+identity before validating bounded input and creating a canonical fragment.
+Do not treat a seed export as a completed review or rebind historical notes.
+Never hand-forge a `review-fragment`. With three genuinely verified same-SHA
+fragments, run:
 
 ```text
 npm run agentproof -- assemble --fragments .agentproof/final-evidence.json .agentproof/test-review.json .agentproof/security-review.json .agentproof/policy-review.json --output .agentproof/assembled-evidence.json
@@ -309,9 +323,12 @@ release, or make a certification claim while stopped.
 
 ## Least privilege and human escalation
 
-- **This skill and specialists:** repository, PR, check, artifact, policy, and
-  comment read only; local bounded artifact writes only. No GitHub mutation,
-  secrets, push, approval, merge, deployment, or release tools.
+- **This runbook/trusted host:** repository, PR, check, artifact, policy, and
+  comment reads; local bounded artifact writes only. No GitHub mutation,
+  secrets in prompts, push, approval, merge, deployment, or release tools.
+- **Public Packet specialists:** no callable tools at all. Only the approved
+  public synthetic packet is supplied; native source resolution, runtime
+  verification, public export validation and wrapping belong to the host.
 - **Analysis workflow:** `contents: read` and `pull-requests: read`; no secrets
   or persisted credentials.
 - **Trusted publisher:** only artifact/content reads and the bounded check/PR

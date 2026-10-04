@@ -1,9 +1,10 @@
 # Security Reviewer gated automation template
 
-> **Status: blocked until effective read-only permissions are verified.** The manual path
-> starts the installed AgentProof Security Reviewer directly in a read-only
-> Copilot App session. This file is a versioned setup input, **not
-> automation-as-code**.
+> **Status: deprecated `0.2.1` repository-reading target; blocked.**
+> This legacy template is retained as a design/negative-control record, not a
+> supported manual App path or automation-as-code. The `0.3.0` Public Packet
+> profiles require zero tools and a separate trusted host. Do not combine this
+> prompt with them or infer App isolation from CLI results.
 
 Historical runtimes retained mutation, shell, and cross-repository capability
 after tool-picker narrowing. Recheck the actual host; never interpret a
@@ -47,7 +48,9 @@ the automation can run safely.
 
 ## Prompt
 
-Paste the text below after replacing placeholders:
+Historical unsupported prompt; do not paste or save it as a current automation.
+All mandatory save gates above remain in force. See
+[public-packet review](../../docs/public-packet-review.md) for the distinct mode.
 
 ```text
 Review pull requests in <OWNER>/<REPO> as the AgentProof Security Reviewer.

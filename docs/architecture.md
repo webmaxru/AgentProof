@@ -20,8 +20,8 @@ or production fitness.
 | Analysis workflow        | `agentproof-analyze.yml`                                  | Use protected workflow bootstrap, read-only GitHub access, no secrets, and an ephemeral runner to create raw head-SHA evidence.        |
 | Publisher                | `agentproof-publish.yml`                                  | Run current orchestration and the separate PR-base evaluator/policy; validate provenance and publish the check/comment/evidence.       |
 | Disposition/revalidation | `agentproof-disposition.yml`, `agentproof-revalidate.yml` | Re-evaluate on decision changes and periodically so deleted or expired acceptance cannot leave a stale green result.                   |
-| App reviewers            | Test, Security, Policy                                    | User starts three isolated, read-only sessions after the check; they return same-SHA advisory fragments and cannot write to GitHub.    |
-| Assembler and canvas     | Evidence Assembler, Evidence Board                        | User runs assembly manually to reject mixed-SHA inputs and load a mutable operational view and decision draft.                         |
+| Public-packet reviewers  | Test, Security, Policy                                    | Trusted host resolves public evidence and enforces native zero tools; specialists return only SHA-bound advisory fragment input.       |
+| Assembler and canvas     | Protected CLI assembly, Evidence Board                    | Operator runs deterministic assembly to reject mixed-SHA inputs and load a mutable operational view and decision draft.                |
 | Permission canary        | Disposable personal PR automation                         | Inspects the effective runtime tool boundary, stops before tool use on mutation capability, and is disabled after a failed validation. |
 | Governance               | GitHub ruleset, CODEOWNERS, independent review            | Require the stable check and a separate human approval before merge.                                                                   |
 
@@ -38,8 +38,9 @@ flowchart LR
   P --> C[AgentProof / gate]
   P --> F[Final evidence artifact]
   C --> R[Repository ruleset]
-  F -->|user-confirmed manual launch| S[Three isolated read-only specialist sessions]
-  S --> E[Manual Evidence Assembler]
+  F --> PH[Trusted public-packet host: native identity and zero-tool verification]
+  PH --> S[Three tool-free advisory specialists]
+  S --> E[Operator-verified export and deterministic assembly]
   E --> B[Evidence Board: mutable]
   H[Authorized PR disposition] --> D[Disposition workflow]
   D --> A
@@ -82,10 +83,14 @@ write capability or additional credential is introduced. Failed refresh remains
 blocking; live comment, periodic and expiry behavior must be verified after
 human-controlled protected-base deployment.
 
-Reviewer sessions are outside this write-capable workflow path. A user starts
-each installed agent or reviewed deep link only after the deterministic result
-exists, confirms a read-only tool set, and later invokes the assembler manually.
-If the App cannot safely reduce an **All tools** default, the launch is canceled.
+Reviewer sessions are outside this write-capable workflow path. Version `0.3.0`
+uses [public-packet mode](public-packet-review.md): a trusted host independently
+checks native public identity/policy/artifact records, stages an isolated native
+CLI invocation with zero tools, verifies native telemetry, and rechecks
+freshness. The model only explains the approved packet. Publication,
+canonical wrapping/assembly and board loading remain separately authorized
+operator actions. The legacy broad-tool App and assembler paths are unsupported,
+not a fallback when the packet route blocks.
 
 Historical trials found that a narrowed tool picker could still leave mutation,
 shell, and cross-repository capabilities in the effective runtime. This is a
@@ -115,8 +120,9 @@ integration, permissions, and policy. Shared scripts expect those installed
 filenames. The application path is a protected shared setting, not PR input.
 
 The integration scope is one GitHub.com repository, initially with synthetic
-data. Installed Actions workflows are PR-triggered; the three reviewer sessions
-and Evidence Assembler are manual.
+data. Installed Actions workflows are PR-triggered; public-packet specialists
+and deterministic assembly are operator-started. No live runtime validation or
+App isolation is implied by the packet adapter's synthetic tests.
 Checked-in automation prompts are blocked setup/product-feedback templates, not
 live personal reviewer automations or automation-as-code. Cross-repository
 portfolio orchestration, automatic merge/release, and a locked audit store are

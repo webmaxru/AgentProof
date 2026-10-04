@@ -285,6 +285,37 @@ Do not add a request/prompt/evidence field or follow it with a model call.
 Unit success alone does not authorize even this state-only native observation,
 and a state-only result does not establish live review compatibility.
 
+### Connect-only diagnostics
+
+`observeCopilotProtocol3Connect(options)` uses the same pinned executable/profile,
+sealed launch flags/environment, physical workspace checks, byte limits, deadline,
+and exit-before-cleanup rule. Its transport permits **exactly one `connect`
+request** and forbids every other RPC, including status, authentication, session
+creation, shutdown, or a second connect. After that response it closes stdin and
+awaits native exit; a rejection still aborts the owned process and remains blocked.
+No cleanup retry or acceptance change is introduced by this diagnostics path.
+
+Both experimental paths record a connect projection capped at 4 KiB. It contains
+result/error presence, fixed allowlisted key names and value types, counts of
+redacted keys, safe numeric protocol/error codes, a pinned-version-match boolean,
+taskKinds presence/type/count (never its elements), and fixed predicate names
+that failed. Version strings are included only when they match the bounded
+numeric `major.minor.patch[-build]` syntax; arbitrary prerelease/build strings,
+private/malformed keys, native error messages/data, and unknown values are not
+copied. Exact wire-frame byte counts and SHA-256 include the received header and
+JSON bytes, not a reconstructed serialization. Malformed frames still fail the
+existing transport checks; missing diagnostics are not safe defaults.
+
+The connect-only capture is `protocol-connect-receipt.json`, identified by
+`experimental-protocol-3-connect-diagnostics-v1`. The unchanged connect guard
+still requires the closed expected result shape, `ok: true`, protocol `3`, the
+exact pinned version, and absent or explicitly empty taskKinds. An accepted
+diagnostic connection returns `connect-only-observed-review-blocked`, not
+initialized-state, authentication, profile-selection, model-inventory, or live
+review proof. Every real connect-only observation requires its own explicit
+authorization; earlier failed receipts remain immutable and are not reconstructed
+from byte counts or replaced by new diagnostics.
+
 ## Deployment status and limitations
 
 Automations remain blocked under every existing

@@ -7,12 +7,18 @@ import test from "node:test";
 import { sha256 } from "@agentproof/evidence-core";
 import { SESSION_ID } from "./public-review-fixtures.mjs";
 import {
+  fakeProtocolChild,
   protocolStateFixture,
   sessionEvent,
   stateFixtureChild,
 } from "./public-review-protocol-fixtures.mjs";
 import { encodeProtocolMessage } from "./public-review-protocol-transport.mjs";
-import { observeCopilotProtocol3State } from "./public-review-protocol.mjs";
+import {
+  MAX_CONNECT_DIAGNOSTICS_BYTES,
+  observeCopilotProtocol3Connect,
+  observeCopilotProtocol3State,
+  projectConnectResponse,
+} from "./public-review-protocol.mjs";
 
 async function setup(t) {
   const root = await mkdtemp(join(tmpdir(), "agentproof-protocol-test-"));
@@ -550,4 +556,256 @@ test("unconfirmed native exit retains only owned runtime paths and reports block
   assert.ok((await readdir(root)).includes(receipt.cleanup.directoryName));
   child.emit("exit", null, "SIGKILL");
   child.emit("close");
+});
+
+function projectionFor(message) {
+  const frame = encodeProtocolMessage(message);
+  return projectConnectResponse(
+    message,
+    {
+      rawResponseBytes: frame.length,
+      rawResponseSha256: sha256(frame),
+    },
+    1,
+  );
+}
+
+test("connect projection preserves only fixed key names/types, numeric fields, and safe version syntax", () => {
+  const secret = "synthetic-private-value";
+  const result = {
+    ok: true,
+    protocolVersion: 3,
+    version: `1.0.92-${secret}`,
+    taskKinds: [secret, { nested: secret }],
+    [`Authorization ${secret}`]: secret,
+    ["malformed\nprivate-key"]: secret,
+    ["__proto__"]: { secret },
+  };
+  const projection = projectionFor({
+    jsonrpc: "2.0",
+    id: 1,
+    result,
+    [`private-envelope-${secret}`]: secret,
+  });
+  const saved = JSON.stringify(projection);
+  assert.ok(Buffer.byteLength(saved) <= MAX_CONNECT_DIAGNOSTICS_BYTES);
+  for (const value of [secret, "Authorization", "private-key", "__proto__", "private-envelope"]) {
+    assert.ok(!saved.includes(value));
+  }
+  assert.equal(projection.envelope.redactedKeyCount, 1);
+  assert.equal(projection.result.redactedKeyCount, 3);
+  assert.equal(projection.resultPresent, true);
+  assert.equal(projection.errorPresent, false);
+  assert.equal(projection.protocolVersion, 3);
+  assert.equal(projection.pinnedVersionMatches, false);
+  assert.equal(projection.version, undefined);
+  assert.deepEqual(projection.taskKinds, { present: true, type: "array", count: 2 });
+  assert.deepEqual(projection.failedPredicates, [
+    "response_keys",
+    "result_shape",
+    "pinned_cli_version",
+    "task_kinds_absent_or_empty",
+  ]);
+});
+
+test("connect diagnostics distinguish missing, null, and numeric fields without inventing zero", () => {
+  for (const protocolVersion of [undefined, null, "3", 4, 3.5, Infinity]) {
+    const result = { ok: true, version: "1.0.92-3" };
+    if (protocolVersion !== undefined) result.protocolVersion = protocolVersion;
+    const message = { jsonrpc: "2.0", id: 1, result };
+    const projection = projectConnectResponse(
+      message,
+      {
+        rawResponseBytes: 50,
+        rawResponseSha256: "0".repeat(64),
+      },
+      1,
+    );
+    assert.equal(projection.predicates.protocol_version_3, false);
+    assert.deepEqual(projection.taskKinds, { present: false, type: "missing" });
+    assert.equal(
+      projection.protocolVersion,
+      [4, 3.5].includes(protocolVersion) ? protocolVersion : undefined,
+    );
+    assert.equal(projection.version, "1.0.92-3");
+    assert.equal(projection.pinnedVersionMatches, true);
+  }
+  const projection = projectionFor({
+    jsonrpc: "2.0",
+    id: 1,
+    result: { ok: true, protocolVersion: 3, version: "1.0.92-4", taskKinds: null },
+  });
+
+  test("large private connect extras cannot expand the bounded persisted projection", () => {
+    const result = { ...protocolStateFixture().connect };
+    for (let index = 0; index < 2048; index++) {
+      result[`synthetic-private-${index}-${"x".repeat(80)}`] = "y".repeat(80);
+    }
+    const projection = projectionFor({ jsonrpc: "2.0", id: 1, result });
+    assert.equal(projection.result.redactedKeyCount, 2048);
+    assert.ok(Buffer.byteLength(JSON.stringify(projection)) <= MAX_CONNECT_DIAGNOSTICS_BYTES);
+    assert.ok(!JSON.stringify(projection).includes("synthetic-private"));
+    assert.deepEqual(projection.failedPredicates, ["result_shape"]);
+  });
+  assert.equal(projection.version, "1.0.92-4");
+  assert.deepEqual(projection.failedPredicates, [
+    "pinned_cli_version",
+    "task_kinds_absent_or_empty",
+  ]);
+  assert.deepEqual(projection.taskKinds, { present: true, type: "null" });
+});
+
+for (const [label, change, failed] of [
+  ["unchanged valid result", () => {}, []],
+  [
+    "optional taskKinds absent",
+    (result) => {
+      delete result.taskKinds;
+    },
+    [],
+  ],
+  [
+    "false ok",
+    (result) => {
+      result.ok = false;
+    },
+    ["ok_true"],
+  ],
+  [
+    "missing required key",
+    (result) => {
+      delete result.ok;
+    },
+    ["result_shape", "ok_true"],
+  ],
+  [
+    "wrong protocol",
+    (result) => {
+      result.protocolVersion = 2;
+    },
+    ["protocol_version_3"],
+  ],
+  [
+    "wrong version",
+    (result) => {
+      result.version = "1.0.92-4";
+    },
+    ["pinned_cli_version"],
+  ],
+  [
+    "nonempty taskKinds",
+    (result) => {
+      result.taskKinds = ["synthetic-private-kind"];
+    },
+    ["task_kinds_absent_or_empty"],
+  ],
+  [
+    "unknown private result key",
+    (result) => {
+      result["synthetic-private-key"] = "synthetic-private-value";
+    },
+    ["result_shape"],
+  ],
+]) {
+  test(`connect-only ${label} preserves acceptance and sends exactly one request`, async (t) => {
+    const { root, options, dependencies } = await setup(t);
+    const fixture = protocolStateFixture();
+    change(fixture.connect);
+    const child = stateFixtureChild(fixture);
+    const operation = observeCopilotProtocol3Connect(options, {
+      ...dependencies,
+      spawnNative: () => child,
+    });
+    if (failed.length) await assert.rejects(operation);
+    else await operation;
+    const saved = await readFile(
+      join(options.captureDirectory, "protocol-connect-receipt.json"),
+      "utf8",
+    );
+    const receipt = JSON.parse(saved);
+    assert.deepEqual(receipt.connect.failedPredicates, failed);
+    assert.equal(
+      receipt.status,
+      failed.length ? "blocked" : "connect-only-observed-review-blocked",
+    );
+    assert.equal(receipt.nativeSessionId, undefined);
+    assert.equal(receipt.auth, undefined);
+    assert.equal(receipt.state, undefined);
+    assert.equal(receipt.modelInventoryStatus, "unknown");
+    assert.equal(receipt.reviewStatus, "blocked");
+    assert.deepEqual(
+      child.messages.map((message) => message.method),
+      ["connect"],
+    );
+    assert.deepEqual(child.messages[0].params, {
+      enableGitHubTelemetryForwarding: false,
+      supportedTaskKinds: [],
+    });
+    assert.equal(receipt.native.requestCount, 1);
+    assert.equal(receipt.native.shutdownAcknowledged, false);
+    assert.equal(receipt.native.exitObserved, true);
+    assert.equal(receipt.native.streamsClosed, true);
+    assert.equal(receipt.cleanup.status, "removed-after-exit");
+    assert.deepEqual(await readdir(root), ["capture"]);
+    assert.ok(!saved.includes("synthetic-private"));
+  });
+}
+
+test("native error and malformed-envelope diagnostics never persist error contents or private keys", async (t) => {
+  const secret = "synthetic-private-error";
+  for (const kind of ["error", "extra-envelope", "ambiguous", "private-id"]) {
+    const { options, dependencies } = await setup(t);
+    const frame = encodeProtocolMessage(
+      kind === "error"
+        ? {
+            jsonrpc: "2.0",
+            id: 1,
+            error: { code: -32601, message: secret, data: { secret }, [secret]: secret },
+          }
+        : kind === "extra-envelope"
+          ? { jsonrpc: "2.0", id: 1, result: protocolStateFixture().connect, [secret]: secret }
+          : kind === "ambiguous"
+            ? { jsonrpc: "2.0", id: 1, result: {}, error: { code: -32602, message: secret } }
+            : { jsonrpc: "2.0", id: secret, result: protocolStateFixture().connect },
+    );
+    const child = fakeProtocolChild((message, native) => native.stdout.write(frame));
+    await assert.rejects(
+      observeCopilotProtocol3Connect(options, { ...dependencies, spawnNative: () => child }),
+    );
+    const saved = await readFile(
+      join(options.captureDirectory, "protocol-connect-receipt.json"),
+      "utf8",
+    );
+    const receipt = JSON.parse(saved);
+    assert.ok(!saved.includes(secret));
+    assert.equal(receipt.connect.rawResponseSha256, sha256(frame));
+    assert.equal(receipt.connect.rawResponseBytes, frame.length);
+    assert.ok(receipt.connect.failedPredicates.length > 0);
+    if (kind === "error") {
+      assert.equal(receipt.connect.errorCode, -32601);
+      assert.equal(receipt.connect.resultPresent, false);
+      assert.equal(receipt.connect.errorPresent, true);
+      assert.equal(receipt.connect.error.redactedKeyCount, 1);
+    }
+  }
+});
+
+test("connect-only launch uses the same sealed flags and environment policy as state-only", async (t) => {
+  const launches = [];
+  for (const operation of [observeCopilotProtocol3State, observeCopilotProtocol3Connect]) {
+    const { options, dependencies } = await setup(t);
+    await operation(options, {
+      ...dependencies,
+      spawnNative: (executable, args, processOptions) => {
+        launches.push({
+          args,
+          environmentKeys: Object.keys(processOptions.env).sort(),
+          shell: processOptions.shell,
+          stdio: processOptions.stdio,
+        });
+        return stateFixtureChild();
+      },
+    });
+  }
+  assert.deepEqual(launches[0], launches[1]);
 });

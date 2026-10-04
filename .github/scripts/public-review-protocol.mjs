@@ -12,9 +12,11 @@ import {
   validatePublicReviewerProfile,
   zeroToolEnvironment,
 } from "./public-review-runtime.mjs";
-import { openProtocolTransport } from "./public-review-protocol-transport.mjs";
+import { MAX_PROTOCOL_BYTES, openProtocolTransport } from "./public-review-protocol-transport.mjs";
 
 export const PROTOCOL_STATE_ADAPTER = "experimental-protocol-3-state-only-v1";
+export const PROTOCOL_CONNECT_ADAPTER = "experimental-protocol-3-connect-diagnostics-v1";
+export const MAX_CONNECT_DIAGNOSTICS_BYTES = 4096;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const DIGEST = /^[0-9a-f]{64}$/u;
 const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}(Z|[+-]\d{2}:\d{2})$/u;
@@ -63,6 +65,99 @@ function exactKeys(value, required, optional = []) {
 
 function empty(value) {
   return Array.isArray(value) && value.length === 0;
+}
+
+function diagnosticType(value) {
+  return value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
+}
+
+function projectedKeys(value, allowed) {
+  if (!object(value)) return { type: diagnosticType(value), keys: [], redactedKeyCount: 0 };
+  return {
+    type: "object",
+    keys: allowed
+      .filter((key) => Object.hasOwn(value, key))
+      .map((key) => ({ key, type: diagnosticType(value[key]) })),
+    redactedKeyCount: Object.keys(value).filter((key) => !allowed.includes(key)).length,
+  };
+}
+
+export function projectConnectResponse(message, fingerprint, expectedId) {
+  requireState(
+    exactKeys(fingerprint, ["rawResponseBytes", "rawResponseSha256"]) &&
+      Number.isSafeInteger(fingerprint.rawResponseBytes) &&
+      fingerprint.rawResponseBytes > 0 &&
+      fingerprint.rawResponseBytes <= MAX_PROTOCOL_BYTES &&
+      DIGEST.test(fingerprint.rawResponseSha256),
+    "Native connect response fingerprint is invalid.",
+  );
+  const resultPresent = object(message) && Object.hasOwn(message, "result");
+  const errorPresent = object(message) && Object.hasOwn(message, "error");
+  const result = resultPresent ? message.result : undefined;
+  const resultObject = object(result);
+  const taskKindsPresent = resultObject && Object.hasOwn(result, "taskKinds");
+  const predicates = {
+    envelope_object: object(message),
+    jsonrpc_2: object(message) && message.jsonrpc === "2.0",
+    matching_numeric_id:
+      object(message) && Number.isInteger(message.id) && message.id === expectedId,
+    response_keys: exactKeys(message, ["jsonrpc", "id"], ["result", "error"]),
+    result_without_error: resultPresent && !errorPresent,
+    result_shape: exactKeys(result, ["ok", "protocolVersion", "version"], ["taskKinds"]),
+    ok_true: resultObject && result.ok === true,
+    protocol_version_3: resultObject && result.protocolVersion === 3,
+    pinned_cli_version: resultObject && result.version === SUPPORTED_COPILOT_VERSION,
+    task_kinds_absent_or_empty: resultObject && (!taskKindsPresent || empty(result.taskKinds)),
+  };
+  const projection = {
+    ...fingerprint,
+    resultPresent,
+    errorPresent,
+    envelope: projectedKeys(message, ["jsonrpc", "id", "result", "error"]),
+    result: projectedKeys(result, ["ok", "protocolVersion", "version", "taskKinds"]),
+    error: projectedKeys(errorPresent ? message.error : undefined, ["code", "message", "data"]),
+    predicates,
+    failedPredicates: Object.keys(predicates).filter((key) => !predicates[key]),
+    missingResultKeys: ["ok", "protocolVersion", "version"].filter(
+      (key) => !resultObject || !Object.hasOwn(result, key),
+    ),
+    pinnedVersionMatches: predicates.pinned_cli_version,
+    taskKinds: {
+      present: taskKindsPresent,
+      type: taskKindsPresent ? diagnosticType(result.taskKinds) : "missing",
+    },
+  };
+  if (
+    resultObject &&
+    typeof result.protocolVersion === "number" &&
+    Number.isFinite(result.protocolVersion) &&
+    Math.abs(result.protocolVersion) <= 2147483647
+  ) {
+    projection.protocolVersion = result.protocolVersion;
+  }
+  // Numeric CLI versions only: arbitrary prerelease/build strings may contain private data.
+  if (
+    resultObject &&
+    typeof result.version === "string" &&
+    /^(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,5})(?:-(0|[1-9][0-9]{0,3}))?$/u.test(
+      result.version,
+    )
+  ) {
+    projection.version = result.version;
+  }
+  if (taskKindsPresent && Array.isArray(result.taskKinds))
+    projection.taskKinds.count = result.taskKinds.length;
+  if (
+    errorPresent &&
+    Number.isSafeInteger(message.error?.code) &&
+    Math.abs(message.error.code) <= 2147483647
+  )
+    projection.errorCode = message.error.code;
+  requireState(
+    Buffer.byteLength(JSON.stringify(projection)) <= MAX_CONNECT_DIAGNOSTICS_BYTES,
+    "Native connect diagnostics exceed their fixed safe bound.",
+  );
+  return projection;
 }
 
 function verifyAuth(value, expectedLogin) {
@@ -466,9 +561,18 @@ async function readState(transport, sessionId, profile, body, receipt) {
   };
 }
 
-export async function observeCopilotProtocol3State(
+export function observeCopilotProtocol3State(options, dependencies) {
+  return observeCopilotProtocol3(options, dependencies, false);
+}
+
+export function observeCopilotProtocol3Connect(options, dependencies) {
+  return observeCopilotProtocol3(options, dependencies, true);
+}
+
+async function observeCopilotProtocol3(
   options,
   { spawnNative, temporaryParent = tmpdir(), inheritedEnvironment = process.env, timeoutMs } = {},
+  connectOnly,
 ) {
   requireState(
     exactKeys(options, [
@@ -510,11 +614,13 @@ export async function observeCopilotProtocol3State(
   );
   await mkdir(captureDirectory, { mode: 0o700 });
   const receipt = {
-    adapter: PROTOCOL_STATE_ADAPTER,
+    adapter: connectOnly ? PROTOCOL_CONNECT_ADAPTER : PROTOCOL_STATE_ADAPTER,
     profileVersion: PUBLIC_REVIEW_PROFILE_VERSION,
     profileSha256: options.profileSha256,
     executableSha256: options.executableSha256,
-    requestedSessionId: options.sessionId,
+    ...(connectOnly
+      ? { attemptId: options.sessionId, connectOnly: true }
+      : { requestedSessionId: options.sessionId }),
     status: "blocked",
     stateOnly: true,
     modelInventoryStatus: "unknown",
@@ -548,6 +654,10 @@ export async function observeCopilotProtocol3State(
         cwd: physicalWorkspace,
         env,
         onNotification: observer.receive,
+        onConnectResponse: (message, fingerprint, expectedId) => {
+          receipt.connect = projectConnectResponse(message, fingerprint, expectedId);
+        },
+        connectOnly,
         timeoutMs,
       },
       spawnNative,
@@ -564,48 +674,59 @@ export async function observeCopilotProtocol3State(
         (!Object.hasOwn(connected, "taskKinds") || empty(connected.taskKinds)),
       "Native connect must confirm protocol 3 and the exact pinned version; no downgrade is permitted.",
     );
-    const status = await transport.request("status.get", {});
-    requireState(
-      exactKeys(status, ["version", "protocolVersion"]) &&
-        status.version === SUPPORTED_COPILOT_VERSION &&
-        status.protocolVersion === 3,
-      "Native status differs from the pinned protocol/version.",
-    );
-    receipt.cliVersion = status.version;
-    receipt.auth = verifyAuth(await transport.request("auth.getStatus", {}), options.expectedLogin);
-    const created = await transport.request(
-      "session.create",
-      sessionConfiguration(options.sessionId, profile, body, physicalWorkspace, home),
-    );
-    requireState(
-      exactKeys(created, ["sessionId"], ["workspacePath", "capabilities"]) &&
-        created.sessionId === options.sessionId,
-      "Native session creation returned another identity.",
-    );
-    receipt.nativeSessionId = created.sessionId;
-    const initialized = await transport.request("session.tools.initializeAndValidate", {
-      sessionId: options.sessionId,
-    });
-    requireState(exactKeys(initialized, []), "Native initialization response is unsupported.");
-    const before = await readState(transport, options.sessionId, profile, body, receipt);
-    const after = await readState(transport, options.sessionId, profile, body, receipt);
-    requireState(
-      JSON.stringify(before) === JSON.stringify(after),
-      "Native profile or initialization state changed during observation.",
-    );
-    verifyAuth(await transport.request("auth.getStatus", {}), options.expectedLogin);
-    requireState(
-      observer.counts.sessionStarts === 1,
-      "Native session-start proof was not observed.",
-    );
+    let observedState;
+    if (!connectOnly) {
+      const status = await transport.request("status.get", {});
+      requireState(
+        exactKeys(status, ["version", "protocolVersion"]) &&
+          status.version === SUPPORTED_COPILOT_VERSION &&
+          status.protocolVersion === 3,
+        "Native status differs from the pinned protocol/version.",
+      );
+      receipt.cliVersion = status.version;
+      receipt.auth = verifyAuth(
+        await transport.request("auth.getStatus", {}),
+        options.expectedLogin,
+      );
+      const created = await transport.request(
+        "session.create",
+        sessionConfiguration(options.sessionId, profile, body, physicalWorkspace, home),
+      );
+      requireState(
+        exactKeys(created, ["sessionId"], ["workspacePath", "capabilities"]) &&
+          created.sessionId === options.sessionId,
+        "Native session creation returned another identity.",
+      );
+      receipt.nativeSessionId = created.sessionId;
+      const initialized = await transport.request("session.tools.initializeAndValidate", {
+        sessionId: options.sessionId,
+      });
+      requireState(exactKeys(initialized, []), "Native initialization response is unsupported.");
+      const before = await readState(transport, options.sessionId, profile, body, receipt);
+      const after = await readState(transport, options.sessionId, profile, body, receipt);
+      requireState(
+        JSON.stringify(before) === JSON.stringify(after),
+        "Native profile or initialization state changed during observation.",
+      );
+      verifyAuth(await transport.request("auth.getStatus", {}), options.expectedLogin);
+      requireState(
+        observer.counts.sessionStarts === 1,
+        "Native session-start proof was not observed.",
+      );
+      observedState = after;
+    }
     requireState(
       sha256(await readFile(localProfile)) === options.profileSha256 &&
         sha256(await readFile(executable)) === options.executableSha256,
       "Native executable or staged profile changed during observation.",
     );
-    receipt.state = after;
-    await transport.request("runtime.shutdown", {});
-    receipt.status = "state-only-observed-review-blocked";
+    if (connectOnly) {
+      receipt.status = "connect-only-observed-review-blocked";
+    } else {
+      receipt.state = observedState;
+      await transport.request("runtime.shutdown", {});
+      receipt.status = "state-only-observed-review-blocked";
+    }
   } catch (error) {
     failure =
       error instanceof AgentProofError
@@ -651,7 +772,10 @@ export async function observeCopilotProtocol3State(
       receipt.blockedReason = failure.message;
     }
     await writeFile(
-      join(captureDirectory, "protocol-state-receipt.json"),
+      join(
+        captureDirectory,
+        connectOnly ? "protocol-connect-receipt.json" : "protocol-state-receipt.json",
+      ),
       `${JSON.stringify(receipt, null, 2)}\n`,
       { flag: "wx", mode: 0o600 },
     );

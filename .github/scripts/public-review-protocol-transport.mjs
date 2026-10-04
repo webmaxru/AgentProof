@@ -46,6 +46,7 @@ export function encodeProtocolMessage(message) {
 export class ProtocolFrameReader {
   #pending = Buffer.alloc(0);
   #length = null;
+  #header = null;
   #onMessage;
 
   constructor(onMessage) {
@@ -76,19 +77,25 @@ export class ProtocolFrameReader {
           throw rejected("HEADER_INVALID", "Native Content-Length header is invalid or excessive.");
         }
         this.#length = length;
+        this.#header = this.#pending.subarray(0, end + 4);
         this.#pending = this.#pending.subarray(end + 4);
       }
       if (this.#pending.length < this.#length) return;
       const body = this.#pending.subarray(0, this.#length);
+      const fingerprint = {
+        rawResponseBytes: this.#header.length + body.length,
+        rawResponseSha256: createHash("sha256").update(this.#header).update(body).digest("hex"),
+      };
       this.#pending = this.#pending.subarray(this.#length);
       this.#length = null;
+      this.#header = null;
       let message;
       try {
         message = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(body));
       } catch {
         throw rejected("JSON_INVALID", "Native protocol JSON or UTF-8 is malformed.");
       }
-      this.#onMessage(message);
+      this.#onMessage(message, fingerprint);
     }
   }
 
@@ -100,11 +107,23 @@ export class ProtocolFrameReader {
 }
 
 export function openProtocolTransport(
-  { executable, args, cwd, env, onNotification, timeoutMs = PROTOCOL_DEADLINE_MS },
+  {
+    executable,
+    args,
+    cwd,
+    env,
+    onNotification,
+    onConnectResponse,
+    connectOnly = false,
+    timeoutMs = PROTOCOL_DEADLINE_MS,
+  },
   spawnNative = spawn,
 ) {
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > PROTOCOL_DEADLINE_MS) {
     throw rejected("DEADLINE_INVALID", "The native deadline must not exceed 180 seconds.");
+  }
+  if (typeof connectOnly !== "boolean") {
+    throw rejected("REQUEST_INVALID", "Connect-only transport mode must be explicit.");
   }
   const startedAt = Date.now();
   const deadlineAt = performance.now() + timeoutMs;
@@ -166,8 +185,15 @@ export function openProtocolTransport(
     return true;
   }
 
-  const reader = new ProtocolFrameReader((message) => {
+  const reader = new ProtocolFrameReader((message, fingerprint) => {
     if (!requireTime()) throw failure;
+    const [outstandingId, outstanding] = pending.entries().next().value ?? [];
+    if (
+      outstanding?.method === "connect" &&
+      (!object(message) || !Object.hasOwn(message, "method"))
+    ) {
+      onConnectResponse?.(message, fingerprint, outstandingId);
+    }
     if (!object(message) || message.jsonrpc !== "2.0") {
       throw rejected("ENVELOPE_INVALID", "Native JSON-RPC envelope is unsupported.");
     }
@@ -183,7 +209,8 @@ export function openProtocolTransport(
         !["session.event", "session.lifecycle"].includes(message.method) ||
         Object.keys(message).some((key) => !["jsonrpc", "method", "params"].includes(key)) ||
         !object(message.params) ||
-        ++stats.notificationCount > MAX_PROTOCOL_NOTIFICATIONS
+        ++stats.notificationCount > MAX_PROTOCOL_NOTIFICATIONS ||
+        connectOnly
       ) {
         throw rejected(
           "NOTIFICATION_INVALID",
@@ -306,6 +333,7 @@ export function openProtocolTransport(
       if (
         closing ||
         !METHODS.has(method) ||
+        (connectOnly && (method !== "connect" || stats.requestCount !== 0)) ||
         pending.size !== 0 ||
         stats.requestCount >= MAX_PROTOCOL_REQUESTS ||
         !object(params)

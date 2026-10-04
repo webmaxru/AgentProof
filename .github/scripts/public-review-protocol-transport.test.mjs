@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
@@ -43,6 +44,23 @@ test("framing survives every byte boundary and multiple frames", () => {
     reader.push(bytes.subarray(split));
     reader.end();
     assert.deepEqual(actual, messages);
+  }
+});
+
+test("raw response fingerprints include exact header casing and JSON whitespace across fragments", () => {
+  const body = Buffer.from('{ "jsonrpc": "2.0", "id": 1, "result": {} }\n');
+  const frame = Buffer.concat([Buffer.from(`content-length: ${body.length}\r\n\r\n`), body]);
+  for (let split = 0; split <= frame.length; split++) {
+    let fingerprint;
+    const reader = new ProtocolFrameReader((message, metadata) => {
+      assert.deepEqual(message.result, {});
+      fingerprint = metadata;
+    });
+    reader.push(frame.subarray(0, split));
+    reader.push(frame.subarray(split));
+    reader.end();
+    assert.equal(fingerprint.rawResponseBytes, frame.length);
+    assert.equal(fingerprint.rawResponseSha256, createHash("sha256").update(frame).digest("hex"));
   }
 });
 
@@ -346,6 +364,35 @@ test("the outgoing request ceiling is exact, and model-send/resume/tools are nev
     await assert.rejects(blocked.request(method, {}));
     await blocked.finish();
     assert.equal(blockedChild.messages.length, 0);
+  }
+});
+
+test("connect-only transport rejects every second request, including shutdown or another connect", async () => {
+  for (const method of [
+    "connect",
+    "status.get",
+    "auth.getStatus",
+    "session.create",
+    "runtime.shutdown",
+  ]) {
+    const child = fakeProtocolChild((message, native) =>
+      native.stdout.write(encodeProtocolMessage({ jsonrpc: "2.0", id: message.id, result: {} })),
+    );
+    const transport = open(child, { connectOnly: true });
+    await transport.request("connect", {});
+    await assert.rejects(transport.request(method, {}));
+    await transport.finish();
+    assert.deepEqual(
+      child.messages.map((message) => message.method),
+      ["connect"],
+    );
+    if (method !== "connect") {
+      const firstChild = fakeProtocolChild();
+      const first = open(firstChild, { connectOnly: true });
+      await assert.rejects(first.request(method, {}));
+      await first.finish();
+      assert.equal(firstChild.messages.length, 0);
+    }
   }
 });
 

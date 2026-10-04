@@ -418,6 +418,129 @@ test("connect-only transport rejects every second request, including shutdown or
   }
 });
 
+const authPrefix = ["connect", "status.get", "auth.getStatus"];
+const authParams = (method) =>
+  method === "connect" ? { enableGitHubTelemetryForwarding: false, supportedTaskKinds: [] } : {};
+
+test("auth-only transport enforces exact ordered methods and rejects every extra or mutating request", async () => {
+  const candidates = [
+    ...authPrefix,
+    "session.create",
+    "session.send",
+    "session.resume",
+    "session.tools.execute",
+    "task.create",
+    "runtime.shutdown",
+    "auth.login",
+    "auth.logout",
+    "session.auth.switch",
+    "auth.setToken",
+    "auth.refresh",
+  ];
+  for (let position = 0; position <= authPrefix.length; position++) {
+    for (const method of candidates.filter((candidate) => candidate !== authPrefix[position])) {
+      const child = fakeProtocolChild((message, native) =>
+        native.stdout.write(encodeProtocolMessage({ jsonrpc: "2.0", id: message.id, result: {} })),
+      );
+      const transport = open(child, { authOnly: true });
+      for (const previous of authPrefix.slice(0, position))
+        await transport.request(previous, authParams(previous));
+      await assert.rejects(transport.request(method, authParams(method)));
+      await transport.finish();
+      assert.deepEqual(
+        child.messages.map((message) => message.method),
+        authPrefix.slice(0, position),
+      );
+    }
+  }
+});
+
+test("auth-only transport cannot inject credential parameters or claim an incomplete healthy prefix", async () => {
+  for (const position of [0, 1, 2]) {
+    const child = fakeProtocolChild((message, native) =>
+      native.stdout.write(encodeProtocolMessage({ jsonrpc: "2.0", id: message.id, result: {} })),
+    );
+    const transport = open(child, { authOnly: true });
+    for (const previous of authPrefix.slice(0, position))
+      await transport.request(previous, authParams(previous));
+    await assert.rejects(
+      transport.request(authPrefix[position], {
+        ...authParams(authPrefix[position]),
+        token: "synthetic-private-token",
+      }),
+    );
+    await transport.finish();
+    assert.equal(child.messages.length, position);
+    assert.ok(!JSON.stringify(transport.metadata()).includes("synthetic-private"));
+  }
+  for (let length = 0; length < authPrefix.length; length++) {
+    const child = fakeProtocolChild((message, native) =>
+      native.stdout.write(encodeProtocolMessage({ jsonrpc: "2.0", id: message.id, result: {} })),
+    );
+    const transport = open(child, { authOnly: true });
+    for (const method of authPrefix.slice(0, length))
+      await transport.request(method, authParams(method));
+    await transport.finish();
+    assert.equal(transport.error.code, "AP_REVIEW_PROTOCOL_REQUEST_INVALID");
+  }
+});
+
+test("auth-only completion observes exit without shutdown and rejects notifications or reverse requests", async () => {
+  for (const extra of [null, "notification", "reverse-request"]) {
+    const child = fakeProtocolChild((message, native) => {
+      native.stdout.write(encodeProtocolMessage({ jsonrpc: "2.0", id: message.id, result: {} }));
+      if (message.method === "auth.getStatus" && extra) {
+        native.stdout.write(
+          encodeProtocolMessage(
+            extra === "notification"
+              ? {
+                  jsonrpc: "2.0",
+                  method: "session.lifecycle",
+                  params: {},
+                }
+              : {
+                  jsonrpc: "2.0",
+                  method: "synthetic-reverse-request",
+                  id: 10,
+                  params: {},
+                },
+          ),
+        );
+      }
+    });
+    const transport = open(child, { authOnly: true });
+    for (const method of authPrefix) await transport.request(method, authParams(method));
+    assert.equal(await transport.finish(), true);
+    assert.equal(transport.metadata().shutdownAcknowledged, false);
+    assert.equal(transport.metadata().exitObserved, true);
+    assert.equal(transport.metadata().streamsClosed, true);
+    assert.equal(Boolean(transport.error), Boolean(extra));
+    assert.equal(transport.metadata().reverseRequestCount, extra === "reverse-request" ? 1 : 0);
+  }
+});
+
+test("diagnostic modes must be explicit and exclusive before any child is created", () => {
+  for (const modes of [
+    { connectOnly: true, authOnly: true },
+    { authOnly: "true" },
+    { authOnly: null },
+  ]) {
+    assert.throws(() =>
+      openProtocolTransport(
+        {
+          executable: process.execPath,
+          args: [],
+          cwd: tmpdir(),
+          env: {},
+          onNotification() {},
+          ...modes,
+        },
+        () => assert.fail("Invalid diagnostic mode must not create a child."),
+      ),
+    );
+  }
+});
+
 test("one deadline bounds an unresponsive child without claiming unobserved exit", async () => {
   const child = fakeProtocolChild(undefined, { closeOnKill: false });
   const transport = open(child, { timeoutMs: 30 });

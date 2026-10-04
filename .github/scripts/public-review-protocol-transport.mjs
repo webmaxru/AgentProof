@@ -25,6 +25,7 @@ const METHODS = new Set([
   "session.tools.getCurrentMetadata",
   "runtime.shutdown",
 ]);
+const AUTH_DIAGNOSTIC_PREFIX = ["connect", "status.get", "auth.getStatus"];
 
 function rejected(code, message) {
   return new AgentProofError(`AP_REVIEW_PROTOCOL_${code}`, message);
@@ -32,6 +33,20 @@ function rejected(code, message) {
 
 function object(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function authDiagnosticParams(method, params) {
+  if (!object(params) || ![Object.prototype, null].includes(Object.getPrototypeOf(params)))
+    return false;
+  if (method !== "connect") return Object.keys(params).length === 0;
+  return (
+    Object.keys(params).length === 2 &&
+    Object.hasOwn(params, "enableGitHubTelemetryForwarding") &&
+    Object.hasOwn(params, "supportedTaskKinds") &&
+    params.enableGitHubTelemetryForwarding === false &&
+    Array.isArray(params.supportedTaskKinds) &&
+    params.supportedTaskKinds.length === 0
+  );
 }
 
 export function encodeProtocolMessage(message) {
@@ -114,7 +129,9 @@ export function openProtocolTransport(
     env,
     onNotification,
     onConnectResponse,
+    onAuthResponse,
     connectOnly = false,
+    authOnly = false,
     timeoutMs = PROTOCOL_DEADLINE_MS,
   },
   spawnNative = spawn,
@@ -122,8 +139,12 @@ export function openProtocolTransport(
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > PROTOCOL_DEADLINE_MS) {
     throw rejected("DEADLINE_INVALID", "The native deadline must not exceed 180 seconds.");
   }
-  if (typeof connectOnly !== "boolean") {
-    throw rejected("REQUEST_INVALID", "Connect-only transport mode must be explicit.");
+  if (
+    typeof connectOnly !== "boolean" ||
+    typeof authOnly !== "boolean" ||
+    (connectOnly && authOnly)
+  ) {
+    throw rejected("REQUEST_INVALID", "Diagnostic transport modes must be explicit and exclusive.");
   }
   const startedAt = Date.now();
   const deadlineAt = performance.now() + timeoutMs;
@@ -194,6 +215,12 @@ export function openProtocolTransport(
     ) {
       onConnectResponse?.(message, fingerprint, outstandingId);
     }
+    if (
+      outstanding?.method === "auth.getStatus" &&
+      (!object(message) || !Object.hasOwn(message, "method"))
+    ) {
+      onAuthResponse?.(message, fingerprint, outstandingId);
+    }
     if (!object(message) || message.jsonrpc !== "2.0") {
       throw rejected("ENVELOPE_INVALID", "Native JSON-RPC envelope is unsupported.");
     }
@@ -210,7 +237,8 @@ export function openProtocolTransport(
         Object.keys(message).some((key) => !["jsonrpc", "method", "params"].includes(key)) ||
         !object(message.params) ||
         ++stats.notificationCount > MAX_PROTOCOL_NOTIFICATIONS ||
-        connectOnly
+        connectOnly ||
+        authOnly
       ) {
         throw rejected(
           "NOTIFICATION_INVALID",
@@ -230,7 +258,8 @@ export function openProtocolTransport(
     }
     stats.responseCount++;
     if (Object.hasOwn(message, "error")) {
-      if (Number.isInteger(message.error?.code)) stats.nativeRpcErrorCode = message.error.code;
+      if (Number.isSafeInteger(message.error?.code) && Math.abs(message.error.code) <= 2147483647)
+        stats.nativeRpcErrorCode = message.error.code;
       throw rejected("RPC_ERROR", "Native RPC failed; no fallback or retry is permitted.");
     }
     const request = pending.get(message.id);
@@ -334,6 +363,9 @@ export function openProtocolTransport(
         closing ||
         !METHODS.has(method) ||
         (connectOnly && (method !== "connect" || stats.requestCount !== 0)) ||
+        (authOnly &&
+          (method !== AUTH_DIAGNOSTIC_PREFIX[stats.requestCount] ||
+            !authDiagnosticParams(method, params))) ||
         pending.size !== 0 ||
         stats.requestCount >= MAX_PROTOCOL_REQUESTS ||
         !object(params)
@@ -377,6 +409,14 @@ export function openProtocolTransport(
       fail(rejected("ABORTED", "Trusted host blocked the native state observation."));
     },
     async finish() {
+      if (authOnly && !failure && stats.requestCount !== AUTH_DIAGNOSTIC_PREFIX.length) {
+        fail(
+          rejected(
+            "REQUEST_INVALID",
+            "Auth-only observation ended before its fixed request prefix completed.",
+          ),
+        );
+      }
       closing = true;
       if (!failure && !stats.streamsClosed && requireTime() && !stats.exitObserved) {
         try {

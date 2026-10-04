@@ -27,9 +27,12 @@ import { encodeProtocolMessage } from "./public-review-protocol-transport.mjs";
 import { cleanupOwnedRuntime } from "./public-review-cleanup.mjs";
 import {
   MAX_CONNECT_DIAGNOSTICS_BYTES,
+  MAX_AUTH_DIAGNOSTICS_BYTES,
+  observeCopilotProtocol3Auth,
   observeCopilotProtocol3Connect,
   observeCopilotProtocol3State,
   projectConnectResponse,
+  projectAuthResponse,
 } from "./public-review-protocol.mjs";
 
 async function setup(t) {
@@ -832,7 +835,11 @@ test("native error and malformed-envelope diagnostics never persist error conten
 
 test("connect-only launch uses the same sealed flags and environment policy as state-only", async (t) => {
   const launches = [];
-  for (const operation of [observeCopilotProtocol3State, observeCopilotProtocol3Connect]) {
+  for (const operation of [
+    observeCopilotProtocol3State,
+    observeCopilotProtocol3Connect,
+    observeCopilotProtocol3Auth,
+  ]) {
     const { options, dependencies } = await setup(t);
     await operation(options, {
       ...dependencies,
@@ -848,6 +855,387 @@ test("connect-only launch uses the same sealed flags and environment policy as s
     });
   }
   assert.deepEqual(launches[0], launches[1]);
+  assert.deepEqual(launches[0], launches[2]);
+});
+
+function authProjectionFor(message) {
+  const frame = encodeProtocolMessage(message);
+  return projectAuthResponse(
+    message,
+    {
+      rawResponseBytes: frame.length,
+      rawResponseSha256: sha256(frame),
+    },
+    3,
+    "fixture-operator",
+  );
+}
+
+test("auth diagnostics omit private values and sensitive fields while preserving fixed types and predicates", () => {
+  const secret = "synthetic-private-auth-value";
+  const message = {
+    jsonrpc: "2.0",
+    id: 3,
+    result: {
+      isAuthenticated: true,
+      login: secret,
+      host: `https://${secret}.example.invalid`,
+      authType: secret,
+      statusMessage: secret,
+      [secret]: secret,
+      ["malformed\nprivate-key"]: secret,
+      ["__proto__"]: { secret },
+    },
+    [secret]: secret,
+  };
+  const projection = authProjectionFor(message);
+  const saved = JSON.stringify(projection);
+  assert.ok(Buffer.byteLength(saved) <= MAX_AUTH_DIAGNOSTICS_BYTES);
+  for (const value of [secret, "example.invalid", "private-key", "__proto__", "statusMessage"])
+    assert.ok(!saved.includes(value));
+  assert.equal(projection.result.redactedKeyCount, 3);
+  assert.equal(projection.envelope.redactedKeyCount, 1);
+  assert.equal(projection.isAuthenticated, true);
+  assert.deepEqual(projection.login, { present: true, type: "string", exactExpectedMatch: false });
+  assert.deepEqual(projection.host, {
+    present: true,
+    type: "string",
+    allowedPublicHostMatch: false,
+  });
+  assert.deepEqual(projection.authType, {
+    present: true,
+    type: "string",
+    allowedSetMatch: false,
+    documentedSetAvailable: true,
+    documentedSetMatch: false,
+  });
+  assert.deepEqual(projection.failedPredicates, [
+    "response_keys",
+    "result_shape",
+    "exact_expected_login",
+    "allowed_public_host",
+    "allowed_credential_source",
+  ]);
+  assert.equal(projection.rawResponseSha256, sha256(encodeProtocolMessage(message)));
+});
+
+test("auth diagnostics distinguish public optional fields, stronger required proof, missing values, and false", () => {
+  for (const value of [false, true, undefined, null, "true", 0]) {
+    const result = value === undefined ? {} : { isAuthenticated: value };
+    const projection = authProjectionFor({ jsonrpc: "2.0", id: 3, result });
+    assert.equal(Object.hasOwn(projection, "isAuthenticated"), typeof value === "boolean");
+    if (typeof value === "boolean") assert.equal(projection.isAuthenticated, value);
+    assert.deepEqual(projection.login, {
+      present: false,
+      type: "missing",
+      exactExpectedMatch: false,
+    });
+    assert.deepEqual(projection.host, {
+      present: false,
+      type: "missing",
+      allowedPublicHostMatch: false,
+    });
+    assert.deepEqual(projection.documentedRequiredKeys, ["isAuthenticated"]);
+    assert.deepEqual(
+      projection.missingDocumentedRequiredKeys,
+      value === undefined ? ["isAuthenticated"] : [],
+    );
+    assert.deepEqual(
+      projection.missingResultKeys,
+      value === undefined
+        ? ["isAuthenticated", "login", "host", "authType"]
+        : ["login", "host", "authType"],
+    );
+    assert.equal(projection.predicates.result_shape, false);
+    assert.equal(projection.predicates.authenticated_true, value === true);
+  }
+});
+
+test("large private auth extras remain redacted within the fixed projection ceiling", () => {
+  const result = { ...protocolStateFixture()["auth.getStatus"] };
+  for (let index = 0; index < 2048; index++)
+    result[`synthetic-private-${index}-${"x".repeat(80)}`] = "y".repeat(80);
+  const projection = authProjectionFor({ jsonrpc: "2.0", id: 3, result });
+  assert.ok(Buffer.byteLength(JSON.stringify(projection)) <= MAX_AUTH_DIAGNOSTICS_BYTES);
+  assert.ok(!JSON.stringify(projection).includes("synthetic-private"));
+  assert.equal(projection.result.redactedKeyCount, 2048);
+  assert.deepEqual(projection.failedPredicates, ["result_shape"]);
+});
+
+for (const [label, change, failed] of [
+  ["unchanged allowed env source", () => {}, []],
+  [
+    "allowed token source",
+    (result) => {
+      result.authType = "token";
+    },
+    [],
+  ],
+  [
+    "false authentication",
+    (result) => {
+      result.isAuthenticated = false;
+    },
+    ["authenticated_true"],
+  ],
+  [
+    "wrong boolean type",
+    (result) => {
+      result.isAuthenticated = "true";
+    },
+    ["authenticated_true"],
+  ],
+  [
+    "missing authenticated field",
+    (result) => {
+      delete result.isAuthenticated;
+    },
+    ["result_shape", "authenticated_true"],
+  ],
+  [
+    "missing optional public login",
+    (result) => {
+      delete result.login;
+    },
+    ["result_shape", "exact_expected_login"],
+  ],
+  [
+    "missing optional public host",
+    (result) => {
+      delete result.host;
+    },
+    ["result_shape", "allowed_public_host"],
+  ],
+  [
+    "missing optional public auth type",
+    (result) => {
+      delete result.authType;
+    },
+    ["result_shape", "allowed_credential_source"],
+  ],
+  [
+    "different login",
+    (result) => {
+      result.login = "synthetic-private-login";
+    },
+    ["exact_expected_login"],
+  ],
+  [
+    "login case mismatch",
+    (result) => {
+      result.login = "Fixture-operator";
+    },
+    ["exact_expected_login"],
+  ],
+  [
+    "private host",
+    (result) => {
+      result.host = "https://synthetic-private-tenant.example.invalid";
+    },
+    ["allowed_public_host"],
+  ],
+  [
+    "unknown source",
+    (result) => {
+      result.authType = "synthetic-private-source";
+    },
+    ["allowed_credential_source"],
+  ],
+  [
+    "unknown result key",
+    (result) => {
+      result["synthetic-private-key"] = "synthetic-private-value";
+    },
+    ["result_shape"],
+  ],
+  [
+    "opaque optional status message",
+    (result) => {
+      result.statusMessage = { private: "synthetic-private-message" };
+    },
+    [],
+  ],
+  ...["user", "gh-cli", "hmac", "api-key"].map((type) => [
+    `documented but disallowed ${type} source`,
+    (result) => {
+      result.authType = type;
+    },
+    ["allowed_credential_source"],
+  ]),
+]) {
+  test(`auth-only ${label} keeps acceptance unchanged and stops after its three-RPC prefix`, async (t) => {
+    const { root, options, dependencies } = await setup(t);
+    const fixture = protocolStateFixture();
+    change(fixture["auth.getStatus"]);
+    const child = stateFixtureChild(fixture);
+    const operation = observeCopilotProtocol3Auth(options, {
+      ...dependencies,
+      spawnNative: () => child,
+    });
+    if (failed.length) await assert.rejects(operation);
+    else await operation;
+    const saved = await readFile(
+      join(options.captureDirectory, "protocol-auth-receipt.json"),
+      "utf8",
+    );
+    const receipt = JSON.parse(saved);
+    assert.equal(receipt.status, failed.length ? "blocked" : "auth-only-observed-review-blocked");
+    assert.deepEqual(receipt.authStatus.failedPredicates, failed);
+    assert.equal(receipt.modelInventoryStatus, "unknown");
+    assert.equal(receipt.reviewStatus, "blocked");
+    assert.equal(receipt.nativeSessionId, undefined);
+    assert.equal(receipt.requestedSessionId, undefined);
+    assert.equal(receipt.auth, undefined);
+    assert.equal(receipt.state, undefined);
+    assert.equal(receipt.native.requestCount, 3);
+    assert.equal(receipt.native.responseCount, 3);
+    assert.equal(receipt.native.shutdownAcknowledged, false);
+    assert.equal(receipt.native.exitObserved, true);
+    assert.equal(receipt.native.streamsClosed, true);
+    assert.equal(receipt.events.sessionStarts, 0);
+    assert.equal(receipt.events.userMessages, 0);
+    assert.equal(receipt.events.modelEvents, 0);
+    assert.equal(receipt.events.toolOrPermissionEvents, 0);
+    assert.deepEqual(
+      child.messages.map(({ method }) => method),
+      ["connect", "status.get", "auth.getStatus"],
+    );
+    assert.deepEqual(
+      child.messages.map(({ params }) => params),
+      [{ enableGitHubTelemetryForwarding: false, supportedTaskKinds: [] }, {}, {}],
+    );
+    assert.equal(receipt.authStatus.authType.documentedSetAvailable, true);
+    assert.equal(
+      receipt.authStatus.authType.documentedSetMatch,
+      ["user", "env", "gh-cli", "hmac", "api-key", "token"].includes(
+        fixture["auth.getStatus"].authType,
+      ),
+    );
+    assert.deepEqual(await readdir(root), ["capture"]);
+    for (const value of [
+      "synthetic-private",
+      "fixture-operator",
+      "Fixture-operator",
+      "github.com",
+      "statusMessage",
+    ])
+      assert.ok(!saved.includes(value));
+  });
+}
+
+test("auth-only earlier guard failures stop the prefix without inventing an auth projection", async (t) => {
+  for (const stage of ["connect", "status.get"]) {
+    const { options, dependencies } = await setup(t);
+    const fixture = protocolStateFixture();
+    fixture[stage].protocolVersion = 2;
+    const child = stateFixtureChild(fixture);
+    await assert.rejects(
+      observeCopilotProtocol3Auth(options, { ...dependencies, spawnNative: () => child }),
+    );
+    const receipt = JSON.parse(
+      await readFile(join(options.captureDirectory, "protocol-auth-receipt.json"), "utf8"),
+    );
+    assert.equal(receipt.authStatus, undefined);
+    assert.equal(receipt.status, "blocked");
+    assert.deepEqual(
+      child.messages.map(({ method }) => method),
+      stage === "connect" ? ["connect"] : ["connect", "status.get"],
+    );
+  }
+});
+
+test("auth-only cannot borrow unrelated inherited credentials or skip the unchanged prelaunch guard", async (t) => {
+  const { options, dependencies } = await setup(t);
+  delete dependencies.inheritedEnvironment.COPILOT_GITHUB_TOKEN;
+  await assert.rejects(
+    observeCopilotProtocol3Auth(options, {
+      ...dependencies,
+      spawnNative: () => assert.fail("Missing explicit authentication must not launch the CLI."),
+    }),
+  );
+  const receipt = JSON.parse(
+    await readFile(join(options.captureDirectory, "protocol-auth-receipt.json"), "utf8"),
+  );
+  assert.equal(receipt.native, undefined);
+  assert.equal(receipt.authStatus, undefined);
+  assert.equal(receipt.status, "blocked");
+  assert.equal(receipt.cleanup.status, "removed-without-launch");
+});
+
+test("auth-only native error and malformed response diagnostics never persist messages or private fields", async (t) => {
+  const secret = "synthetic-private-auth-error";
+  for (const kind of [
+    "error",
+    "extra-envelope",
+    "ambiguous",
+    "private-id",
+    "oversize-error-code",
+  ]) {
+    const { options, dependencies } = await setup(t);
+    const fixture = protocolStateFixture();
+    const response =
+      kind === "error" || kind === "oversize-error-code"
+        ? {
+            jsonrpc: "2.0",
+            id: 3,
+            error: {
+              code: kind === "error" ? -32601 : Number.MAX_SAFE_INTEGER,
+              message: secret,
+              data: { secret },
+              [secret]: secret,
+            },
+          }
+        : kind === "extra-envelope"
+          ? {
+              jsonrpc: "2.0",
+              id: 3,
+              result: fixture["auth.getStatus"],
+              [secret]: secret,
+            }
+          : kind === "ambiguous"
+            ? {
+                jsonrpc: "2.0",
+                id: 3,
+                result: fixture["auth.getStatus"],
+                error: { code: -32602, message: secret },
+              }
+            : { jsonrpc: "2.0", id: secret, result: fixture["auth.getStatus"] };
+    const frame = encodeProtocolMessage(response);
+    const child = fakeProtocolChild((message, native) => {
+      native.stdout.write(
+        message.method === "auth.getStatus"
+          ? frame
+          : encodeProtocolMessage({
+              jsonrpc: "2.0",
+              id: message.id,
+              result: fixture[message.method],
+            }),
+      );
+    });
+    await assert.rejects(
+      observeCopilotProtocol3Auth(options, { ...dependencies, spawnNative: () => child }),
+    );
+    const saved = await readFile(
+      join(options.captureDirectory, "protocol-auth-receipt.json"),
+      "utf8",
+    );
+    const receipt = JSON.parse(saved);
+    assert.ok(!saved.includes(secret));
+    assert.ok(!saved.includes("fixture-operator"));
+    assert.ok(!saved.includes("github.com"));
+    assert.equal(receipt.authStatus.rawResponseBytes, frame.length);
+    assert.equal(receipt.authStatus.rawResponseSha256, sha256(frame));
+    assert.ok(receipt.authStatus.failedPredicates.length > 0);
+    assert.equal(receipt.native.requestCount, 3);
+    if (kind === "error") {
+      assert.equal(receipt.authStatus.errorCode, -32601);
+      assert.equal(receipt.authStatus.error.redactedKeyCount, 1);
+      assert.deepEqual(receipt.authStatus.error.keys, [{ key: "code", type: "number" }]);
+    } else if (kind === "oversize-error-code") {
+      assert.equal(receipt.authStatus.errorCode, undefined);
+      assert.equal(receipt.native.nativeRpcErrorCode, undefined);
+    }
+  }
 });
 
 test("published task metadata neither authorizes tasks nor substitutes for initialized tool state", async (t) => {

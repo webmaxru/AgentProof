@@ -356,6 +356,54 @@ but failed the then-empty-only predicate. Its elements were not exported or
 established. The subsequent contract correction validates new observations
 against the published type; it does not reinterpret that failure as success.
 
+### Auth-only diagnostics
+
+`observeCopilotProtocol3Auth(options)` is a separate diagnostic API with the
+same pinned executable/profile, sealed flags/environment, physical workspace,
+limits, original deadline, and fixed-target cleanup. Its transport permits only
+the ordered prefix `connect` -> `status.get` -> `auth.getStatus`, then stops.
+Connect parameters remain the fixed empty supported-task-kind declaration and
+disabled telemetry forwarding; status/auth parameters must be empty objects.
+Repeated, skipped, additional, or credential-bearing requests are rejected.
+An earlier failed guard stops the prefix immediately. A healthy incomplete
+prefix cannot be reported as complete. No session creation, shutdown RPC,
+model/user/tool/task operation, auth mutation, or permission flow is available.
+Native notifications and reverse requests also block this diagnostic route.
+
+The pinned public `client.ts` sends root `auth.getStatus` and returns
+[`GetAuthStatusResponse` from `types.ts`](https://github.com/github/copilot-sdk/blob/ef04633cc84e4ba8e79888a39259ca276f5de732/nodejs/src/types.ts).
+That interface requires `isAuthenticated: boolean`; `login`, `host`, `authType`,
+and `statusMessage` are optional. Its explicit auth-type union is `"user" |
+"env" | "gh-cli" | "hmac" | "api-key" | "token"`. This is not the separate
+session-scoped authentication schema. The **unchanged** host guard is stronger:
+it requires all identity/source fields, `isAuthenticated: true`, an exact expected
+login, one of its two allowed public GitHub host strings, and source `env` or
+`token`. Public optionality or a documented additional source does not satisfy
+those requirements and never authorizes a fallback.
+
+`protocol-auth-receipt.json` uses adapter
+`experimental-protocol-3-auth-diagnostics-v1`. Its `authStatus` projection is
+capped at 4 KiB and records exact frame bytes/hash, result/error presence, fixed
+key names/types, redacted extra-key counts, missing guard/public required keys,
+and individual failed predicates. The actual `isAuthenticated` boolean is
+included only when correctly typed. Login, host, and auth type are represented
+only by presence/type and exact-match or set-membership booleans. The documented
+auth-type set is explicitly identified as available; membership is separate from
+the unchanged allowed-source check. Neither raw matched nor mismatched account,
+host, or source strings are persisted. Status-message fields and error messages/
+data are omitted entirely; only a bounded numeric native error code may remain.
+Unknown/malformed private keys are counted, never echoed.
+
+The prelaunch credential guard and existing one-use saved-native launcher
+channel remain unchanged. Only a separately authorized trusted launcher may
+reuse its existing approved credential transiently in `COPILOT_GITHUB_TOKEN`;
+inherited `GH_TOKEN`/`GITHUB_TOKEN` are not substitutes. This API cannot acquire,
+refresh, save, switch, or repair credentials. An accepted diagnostic result is
+`auth-only-observed-review-blocked`, not a session/profile/initialization or
+model-inventory proof. A missing/mismatched native authentication or identity
+remains a genuine blocker. Each real observation requires separate authorization,
+and no corrected native retry or model turn follows it.
+
 ## Deployment status and limitations
 
 Automations remain blocked under every existing

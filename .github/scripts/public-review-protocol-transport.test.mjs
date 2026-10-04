@@ -284,6 +284,20 @@ test("elapsed deadline is enforced even before its timer callback can run", asyn
   child.complete();
 });
 
+test("cleanup sees only the remaining original deadline even after native exit closes its timer", async () => {
+  const child = fakeProtocolChild();
+  const transport = open(child, { timeoutMs: 40 });
+  const initial = transport.remainingMilliseconds();
+  assert.ok(initial > 0 && initial <= 40);
+  child.complete();
+  assert.equal(await transport.finish(), true);
+  const until = performance.now() + 50;
+  while (performance.now() < until) {
+    /* Deliberately advance beyond the original deadline after transport closure. */
+  }
+  assert.equal(transport.remainingMilliseconds(), 0);
+});
+
 test("real owned stdio child exits and closes streams before finish returns", async (t) => {
   let child;
   const transport = openProtocolTransport(
@@ -358,7 +372,15 @@ test("the outgoing request ceiling is exact, and model-send/resume/tools are nev
   await transport.finish();
   assert.equal(child.messages.length, MAX_PROTOCOL_REQUESTS);
 
-  for (const method of ["session.send", "session.resume", "session.tools.execute", "ping"]) {
+  for (const method of [
+    "session.send",
+    "session.resume",
+    "session.tools.execute",
+    "ping",
+    "task.create",
+    "task.run",
+    "session.tasks.create",
+  ]) {
     const blockedChild = fakeProtocolChild();
     const blocked = open(blockedChild);
     await assert.rejects(blocked.request(method, {}));

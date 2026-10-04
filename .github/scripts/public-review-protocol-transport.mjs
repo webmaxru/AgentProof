@@ -394,6 +394,9 @@ export function openProtocolTransport(
         stderrSha256: hashes.stderr.copy().digest("hex"),
       };
     },
+    remainingMilliseconds() {
+      return Math.max(0, Math.floor(deadlineAt - performance.now()));
+    },
     get error() {
       return failure;
     },

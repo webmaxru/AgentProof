@@ -201,6 +201,15 @@ cross-version protocol. The host implements only the default UTF-8
 `Content-Length` stdio framing used by `vscode-jsonrpc` `8.2.1`; it adds no SDK
 dependency, SDK patch, TCP connection, global installation, or plugin.
 
+The pinned `TaskKind` declaration is the closed union `"agent" | "shell" |
+"client"`; `ConnectResult.taskKinds` is an optional array of those values.
+The host accepts that published type, with the existing frame/cumulative byte
+bounds, rather than requiring an empty advertisement or inventing a uniqueness
+constraint. Null, non-arrays, malformed elements, and unknown values block.
+Outgoing `supportedTaskKinds: []` remains unchanged. Returned task-kind
+metadata is neither a model tool inventory nor permission to create/run tasks:
+no task, model-send, or resume RPC is available.
+
 Only these host-owned inputs are accepted:
 
 | Option                           | Required value                                                                                                                                |
@@ -269,6 +278,30 @@ before removing its owned runtime directory. A requested kill is not exit
 proof. Deadline expiry blocks; if exit or stream closure is unconfirmed, the
 host retains that directory instead of falsely reporting cleanup.
 
+Cleanup snapshots the created directory's physical path and filesystem identity
+before launch. After verified native exit/stream closure, a fixed, credential-free
+Node filesystem helper rechecks that exact identity, rejects links/replacements,
+and removes only that owned directory. Its cwd is outside the deletion target;
+it uses the trusted host's Node executable and an empty environment, with no
+inherited `NODE_OPTIONS`, `NODE_PATH`, authentication, or plugin configuration.
+The helper's actual exit and stream closure must also be observed before removal
+is reported. Recursive `fs.rm` is not abortable in-process, so the helper has a
+kill timeout limited to the transport's **remaining original monotonic deadline**;
+expiry is failure, never a new cleanup deadline or a successful requested kill.
+
+The first removal error is retained as `firstErrorCode`, alongside every attempt,
+its remaining budget, path-verification result, and observed helper lifecycle.
+Only Windows `EBUSY`, `ENOTEMPTY`, or `EPERM` from a verified removal may trigger
+one retry, after 100 ms and another identity check, within that same remaining
+budget. These are a narrow subset of the
+[documented Node `fs.rm` retry errors](https://nodejs.org/api/fs.html#fspromisesrmpath-options).
+Built-in removal retries are disabled. Other errors, unverified lifecycle/path,
+unknown error codes, and exhausted budgets explicitly block cleanup. Error
+messages, arbitrary keys/strings, and full paths are not persisted. A recovered
+cleanup is recorded as `removed-after-retry`; it does not clear an earlier native
+observation failure. Historical receipts with discarded filesystem error codes
+remain unchanged; their original codes cannot be recovered or inferred.
+
 `protocol-state-receipt.json` contains only allowlisted state/status metadata,
 observed event/RPC counts, host/native identities and timestamps, and hashes.
 Raw stdio, authored/native prompt payloads, full MCP host config, and native
@@ -293,7 +326,8 @@ and exit-before-cleanup rule. Its transport permits **exactly one `connect`
 request** and forbids every other RPC, including status, authentication, session
 creation, shutdown, or a second connect. After that response it closes stdin and
 awaits native exit; a rejection still aborts the owned process and remains blocked.
-No cleanup retry or acceptance change is introduced by this diagnostics path.
+There is no status/authentication/session/model follow-up even when connect is
+accepted. It shares the narrowly scoped cleanup rules above.
 
 Both experimental paths record a connect projection capped at 4 KiB. It contains
 result/error presence, fixed allowlisted key names and value types, counts of
@@ -307,14 +341,20 @@ JSON bytes, not a reconstructed serialization. Malformed frames still fail the
 existing transport checks; missing diagnostics are not safe defaults.
 
 The connect-only capture is `protocol-connect-receipt.json`, identified by
-`experimental-protocol-3-connect-diagnostics-v1`. The unchanged connect guard
-still requires the closed expected result shape, `ok: true`, protocol `3`, the
-exact pinned version, and absent or explicitly empty taskKinds. An accepted
+`experimental-protocol-3-connect-diagnostics-v1`. The connect guard
+requires the closed expected result shape, `ok: true`, protocol `3`, the
+exact pinned version, and absent or valid published `TaskKind[]` metadata. An accepted
 diagnostic connection returns `connect-only-observed-review-blocked`, not
 initialized-state, authentication, profile-selection, model-inventory, or live
 review proof. Every real connect-only observation requires its own explicit
 authorization; earlier failed receipts remain immutable and are not reconstructed
 from byte counts or replaced by new diagnostics.
+
+The original `3447373` diagnostics-only observation remains a failure: it
+matched the pinned protocol/version and returned a two-entry taskKinds array,
+but failed the then-empty-only predicate. Its elements were not exported or
+established. The subsequent contract correction validates new observations
+against the published type; it does not reinterpret that failure as success.
 
 ## Deployment status and limitations
 

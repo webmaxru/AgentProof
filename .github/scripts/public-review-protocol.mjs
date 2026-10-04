@@ -1,4 +1,5 @@
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
+import { performance } from "node:perf_hooks";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,7 +13,12 @@ import {
   validatePublicReviewerProfile,
   zeroToolEnvironment,
 } from "./public-review-runtime.mjs";
-import { MAX_PROTOCOL_BYTES, openProtocolTransport } from "./public-review-protocol-transport.mjs";
+import {
+  MAX_PROTOCOL_BYTES,
+  PROTOCOL_DEADLINE_MS,
+  openProtocolTransport,
+} from "./public-review-protocol-transport.mjs";
+import { cleanupOwnedRuntime } from "./public-review-cleanup.mjs";
 
 export const PROTOCOL_STATE_ADAPTER = "experimental-protocol-3-state-only-v1";
 export const PROTOCOL_CONNECT_ADAPTER = "experimental-protocol-3-connect-diagnostics-v1";
@@ -21,6 +27,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{1
 const DIGEST = /^[0-9a-f]{64}$/u;
 const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}(Z|[+-]\d{2}:\d{2})$/u;
 const MCP_NAMES = ["github-mcp-server", "githubiq"];
+const TASK_KINDS = new Set(["agent", "shell", "client"]);
 const RUNTIME_ARGUMENTS = [
   "--headless",
   "--stdio",
@@ -67,6 +74,10 @@ function empty(value) {
   return Array.isArray(value) && value.length === 0;
 }
 
+function publishedTaskKinds(value) {
+  return Array.isArray(value) && value.every((kind) => TASK_KINDS.has(kind));
+}
+
 function diagnosticType(value) {
   return value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
 }
@@ -107,7 +118,8 @@ export function projectConnectResponse(message, fingerprint, expectedId) {
     ok_true: resultObject && result.ok === true,
     protocol_version_3: resultObject && result.protocolVersion === 3,
     pinned_cli_version: resultObject && result.version === SUPPORTED_COPILOT_VERSION,
-    task_kinds_absent_or_empty: resultObject && (!taskKindsPresent || empty(result.taskKinds)),
+    task_kinds_published_type:
+      resultObject && (!taskKindsPresent || publishedTaskKinds(result.taskKinds)),
   };
   const projection = {
     ...fingerprint,
@@ -574,6 +586,7 @@ async function observeCopilotProtocol3(
   { spawnNative, temporaryParent = tmpdir(), inheritedEnvironment = process.env, timeoutMs } = {},
   connectOnly,
 ) {
+  const setupDeadline = performance.now() + PROTOCOL_DEADLINE_MS;
   requireState(
     exactKeys(options, [
       "executable",
@@ -627,12 +640,19 @@ async function observeCopilotProtocol3(
     reviewStatus: "blocked",
   };
   let runtimeRoot;
+  let runtimeIdentity;
   let transport;
   let failure;
   try {
     runtimeRoot = await mkdtemp(
       join(await requireNoGitAncestor(temporaryParent), "agentproof-protocol-state-"),
     );
+    const identity = await lstat(runtimeRoot, { bigint: true });
+    runtimeIdentity = {
+      path: await realpath(runtimeRoot),
+      dev: identity.dev.toString(),
+      ino: identity.ino.toString(),
+    };
     const home = join(runtimeRoot, "home");
     const workspace = join(runtimeRoot, "workspace");
     await mkdir(home, { mode: 0o700 });
@@ -671,7 +691,7 @@ async function observeCopilotProtocol3(
         connected.ok === true &&
         connected.protocolVersion === 3 &&
         connected.version === SUPPORTED_COPILOT_VERSION &&
-        (!Object.hasOwn(connected, "taskKinds") || empty(connected.taskKinds)),
+        (!Object.hasOwn(connected, "taskKinds") || publishedTaskKinds(connected.taskKinds)),
       "Native connect must confirm protocol 3 and the exact pinned version; no downgrade is permitted.",
     );
     let observedState;
@@ -752,19 +772,31 @@ async function observeCopilotProtocol3(
         status: "retained-unconfirmed-exit",
         directoryName: basename(runtimeRoot),
       };
-    } else if (runtimeRoot) {
-      try {
-        await rm(runtimeRoot, { recursive: true });
-        receipt.cleanup = {
-          status: receipt.native?.exitObserved ? "removed-after-exit" : "removed-without-launch",
-        };
-      } catch {
+    } else if (runtimeIdentity) {
+      receipt.cleanup = await cleanupOwnedRuntime({
+        identity: runtimeIdentity,
+        nativeExitObserved: receipt.native?.exitObserved === true,
+        nativeStreamsClosed: receipt.native?.streamsClosed === true,
+        noProcessStarted: !transport || receipt.native?.spawnFailed === true,
+        remainingMilliseconds: transport
+          ? () => transport.remainingMilliseconds()
+          : () => Math.max(0, setupDeadline - performance.now()),
+      });
+      if (receipt.cleanup.status === "failed") {
         failure ??= new AgentProofError(
           "AP_REVIEW_PROTOCOL_CLEANUP_FAILED",
           "Owned runtime cleanup failed after native exit.",
         );
-        receipt.cleanup = { status: "failed", directoryName: basename(runtimeRoot) };
       }
+    } else if (runtimeRoot) {
+      receipt.cleanup = {
+        status: "retained-unverified-path",
+        directoryName: basename(runtimeRoot),
+      };
+      failure ??= new AgentProofError(
+        "AP_REVIEW_PROTOCOL_CLEANUP_FAILED",
+        "Owned runtime identity is unverified; its path was retained.",
+      );
     }
     if (failure) {
       receipt.status = "blocked";

@@ -1,6 +1,17 @@
 import assert from "node:assert/strict";
 import { realpathSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, readdir, rm, symlink, unlink } from "node:fs/promises";
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath,
+  rm,
+  symlink,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -13,6 +24,7 @@ import {
   stateFixtureChild,
 } from "./public-review-protocol-fixtures.mjs";
 import { encodeProtocolMessage } from "./public-review-protocol-transport.mjs";
+import { cleanupOwnedRuntime } from "./public-review-cleanup.mjs";
 import {
   MAX_CONNECT_DIAGNOSTICS_BYTES,
   observeCopilotProtocol3Connect,
@@ -604,7 +616,7 @@ test("connect projection preserves only fixed key names/types, numeric fields, a
     "response_keys",
     "result_shape",
     "pinned_cli_version",
-    "task_kinds_absent_or_empty",
+    "task_kinds_published_type",
   ]);
 });
 
@@ -650,7 +662,7 @@ test("connect diagnostics distinguish missing, null, and numeric fields without 
   assert.equal(projection.version, "1.0.92-4");
   assert.deepEqual(projection.failedPredicates, [
     "pinned_cli_version",
-    "task_kinds_absent_or_empty",
+    "task_kinds_published_type",
   ]);
   assert.deepEqual(projection.taskKinds, { present: true, type: "null" });
 });
@@ -693,11 +705,11 @@ for (const [label, change, failed] of [
     ["pinned_cli_version"],
   ],
   [
-    "nonempty taskKinds",
+    "unknown task kind",
     (result) => {
       result.taskKinds = ["synthetic-private-kind"];
     },
-    ["task_kinds_absent_or_empty"],
+    ["task_kinds_published_type"],
   ],
   [
     "unknown private result key",
@@ -706,8 +718,36 @@ for (const [label, change, failed] of [
     },
     ["result_shape"],
   ],
+  ...[["agent"], ["shell"], ["client"], ["agent", "shell", "client"], ["agent", "agent"]].map(
+    (kinds) => [
+      `published task kinds ${kinds.join(",")}`,
+      (result) => {
+        result.taskKinds = kinds;
+      },
+      [],
+    ],
+  ),
+  ...[
+    null,
+    "agent",
+    {},
+    0,
+    [null],
+    [0],
+    [{}],
+    [[]],
+    ["Agent"],
+    ["agent "],
+    ["agent", "synthetic-private-kind"],
+  ].map((kinds, index) => [
+    `malformed task kinds ${index}`,
+    (result) => {
+      result.taskKinds = kinds;
+    },
+    ["task_kinds_published_type"],
+  ]),
 ]) {
-  test(`connect-only ${label} preserves acceptance and sends exactly one request`, async (t) => {
+  test(`connect-only ${label} enforces the public contract and sends exactly one request`, async (t) => {
     const { root, options, dependencies } = await setup(t);
     const fixture = protocolStateFixture();
     change(fixture.connect);
@@ -808,4 +848,326 @@ test("connect-only launch uses the same sealed flags and environment policy as s
     });
   }
   assert.deepEqual(launches[0], launches[1]);
+});
+
+test("published task metadata neither authorizes tasks nor substitutes for initialized tool state", async (t) => {
+  for (const tools of [[], null, [{ name: "synthetic-tool" }]]) {
+    const { options, dependencies } = await setup(t);
+    const fixture = protocolStateFixture();
+    fixture.connect.taskKinds = ["agent", "shell", "client"];
+    fixture["session.tools.getCurrentMetadata"] = { tools };
+    const child = stateFixtureChild(fixture);
+    const operation = observeCopilotProtocol3State(options, {
+      ...dependencies,
+      spawnNative: () => child,
+    });
+    if (Array.isArray(tools) && tools.length === 0) await operation;
+    else await assert.rejects(operation);
+    const receipt = JSON.parse(
+      await readFile(join(options.captureDirectory, "protocol-state-receipt.json"), "utf8"),
+    );
+    assert.deepEqual(receipt.connect.failedPredicates, []);
+    assert.equal(receipt.connect.taskKinds.count, 3);
+    assert.equal(receipt.modelInventoryStatus, "unknown");
+    assert.equal(receipt.reviewStatus, "blocked");
+    assert.equal(receipt.events.userMessages, 0);
+    assert.equal(receipt.events.modelEvents, 0);
+    assert.equal(receipt.events.toolOrPermissionEvents, 0);
+    assert.ok(!child.messages.some(({ method }) => /task|send|resume/u.test(method)));
+    assert.deepEqual(child.messages[0].params.supportedTaskKinds, []);
+    assert.equal(
+      receipt.status,
+      tools?.length === 0 ? "state-only-observed-review-blocked" : "blocked",
+    );
+  }
+});
+
+const removedFixture = {
+  removed: true,
+  pathVerified: true,
+  stage: "verify-removed",
+  errorCode: null,
+  worker: { exitObserved: true, streamsClosed: true },
+};
+const cleanupOptions = (remainingMilliseconds = () => 1000) => ({
+  identity: { path: join(tmpdir(), "agentproof-protocol-state-Test99"), dev: "1", ino: "2" },
+  nativeExitObserved: true,
+  nativeStreamsClosed: true,
+  noProcessStarted: false,
+  remainingMilliseconds,
+});
+const failedRemovalFixture = (errorCode) => ({
+  removed: false,
+  pathVerified: true,
+  stage: "remove",
+  errorCode,
+  worker: { exitObserved: true, streamsClosed: true },
+});
+
+test("cleanup retains each documented transient Windows failure and retries only once", async () => {
+  for (const errorCode of ["EBUSY", "ENOTEMPTY", "EPERM"]) {
+    let remaining = 1000;
+    const received = [];
+    const receipt = await cleanupOwnedRuntime(
+      cleanupOptions(() => remaining),
+      {
+        platform: "win32",
+        wait: async (milliseconds) => {
+          assert.equal(milliseconds, 100);
+          remaining -= milliseconds;
+        },
+        remove: async (identity, timeout) => {
+          received.push({ identity, timeout });
+          remaining -= 25;
+          return received.length === 1 ? failedRemovalFixture(errorCode) : removedFixture;
+        },
+      },
+    );
+    assert.equal(receipt.status, "removed-after-retry");
+    assert.equal(receipt.firstErrorCode, errorCode);
+    assert.equal(receipt.errorCode, undefined);
+    assert.deepEqual(
+      receipt.attempts.map((attempt) => attempt.errorCode),
+      [errorCode, null],
+    );
+    assert.deepEqual(
+      received.map((call) => call.timeout),
+      [1000, 875],
+    );
+    assert.strictEqual(received[0].identity, received[1].identity);
+  }
+});
+
+test("non-transient, unknown, non-Windows, repeated, or unverified cleanup failures never loop", async () => {
+  for (const [errorCode, platform, maxCalls] of [
+    ["EACCES", "win32", 1],
+    ["EMFILE", "win32", 1],
+    ["ENFILE", "win32", 1],
+    ["UNCLASSIFIED_FILESYSTEM_ERROR", "win32", 1],
+    ["OWNED_PATH_CHANGED", "win32", 1],
+    ["EPERM", "linux", 1],
+    ["ENOTEMPTY", "win32", 2],
+  ]) {
+    let calls = 0;
+    const receipt = await cleanupOwnedRuntime(cleanupOptions(), {
+      platform,
+      wait: async () => {},
+      remove: async () => {
+        calls++;
+        return failedRemovalFixture(errorCode);
+      },
+    });
+    assert.equal(calls, maxCalls);
+    assert.equal(receipt.status, "failed");
+    assert.equal(receipt.errorCode, errorCode);
+    assert.equal(receipt.attempts.length, maxCalls);
+  }
+  const receipt = await cleanupOwnedRuntime(cleanupOptions(), {
+    platform: "win32",
+    wait: async () => assert.fail("Unverified removal must not retry."),
+    remove: async () => ({ ...failedRemovalFixture("EPERM"), pathVerified: false }),
+  });
+  assert.equal(receipt.attempts.length, 1);
+  assert.equal(receipt.status, "failed");
+});
+
+test("cleanup deadline is never reset and no new removal starts after the remaining budget", async () => {
+  for (const remaining of [0, -1, NaN, Infinity]) {
+    const receipt = await cleanupOwnedRuntime(
+      cleanupOptions(() => remaining),
+      {
+        remove: async () => assert.fail("Expired or invalid budget must not remove."),
+      },
+    );
+    assert.equal(receipt.errorCode, "CLEANUP_DEADLINE");
+    assert.equal(receipt.attempts.length, 0);
+  }
+  let remaining = 150;
+  const receipt = await cleanupOwnedRuntime(
+    cleanupOptions(() => remaining),
+    {
+      platform: "win32",
+      wait: async () => {
+        remaining = 0;
+      },
+      remove: async () => failedRemovalFixture("EPERM"),
+    },
+  );
+  assert.equal(receipt.status, "failed");
+  assert.equal(receipt.firstErrorCode, "EPERM");
+  assert.equal(receipt.errorCode, "CLEANUP_DEADLINE");
+  assert.equal(receipt.attempts.length, 1);
+  const late = await cleanupOwnedRuntime(
+    cleanupOptions(() => remaining),
+    {
+      remove: async () => assert.fail("Expired original deadline must not remove."),
+    },
+  );
+  assert.equal(late.errorCode, "CLEANUP_DEADLINE");
+  remaining = 50;
+  const lateFailure = await cleanupOwnedRuntime(
+    cleanupOptions(() => remaining),
+    {
+      remove: async () => {
+        remaining = 0;
+        return failedRemovalFixture("EPERM");
+      },
+    },
+  );
+  assert.equal(lateFailure.status, "failed");
+  assert.equal(lateFailure.errorCode, "CLEANUP_DEADLINE");
+  assert.equal(lateFailure.firstErrorCode, "EPERM");
+  assert.equal(lateFailure.attempts[0].errorCode, "EPERM");
+});
+
+test("cleanup requires observed exit plus closed streams or an explicit never-started process", async () => {
+  for (const facts of [
+    { nativeExitObserved: false },
+    { nativeStreamsClosed: false },
+    { nativeExitObserved: undefined },
+    { nativeStreamsClosed: undefined },
+  ]) {
+    const receipt = await cleanupOwnedRuntime(
+      { ...cleanupOptions(), ...facts },
+      {
+        remove: async () => assert.fail("Unconfirmed native lifecycle must not remove."),
+      },
+    );
+    assert.equal(receipt.errorCode, "CLEANUP_OWNERSHIP_UNVERIFIED");
+    assert.equal(receipt.attempts.length, 0);
+  }
+  const receipt = await cleanupOwnedRuntime(
+    {
+      ...cleanupOptions(),
+      noProcessStarted: true,
+      nativeExitObserved: false,
+      nativeStreamsClosed: false,
+    },
+    { remove: async () => removedFixture },
+  );
+  assert.equal(receipt.status, "removed-without-launch");
+});
+
+test("cleanup never persists malformed worker data, private keys, error text, or unknown error codes", async () => {
+  for (const result of [
+    { ...failedRemovalFixture("EPERM"), message: "synthetic-private-error" },
+    { ...failedRemovalFixture("EPERM"), ["private\nkey"]: "synthetic-private-value" },
+    failedRemovalFixture("synthetic-private-code"),
+    { ...removedFixture, stage: "remove" },
+    { ...removedFixture, removed: "synthetic-private-value" },
+    { ...removedFixture, worker: { exitObserved: true, streamsClosed: false } },
+    {
+      ...removedFixture,
+      worker: { exitObserved: true, streamsClosed: true, private: "synthetic-private-value" },
+    },
+    null,
+  ]) {
+    const receipt = await cleanupOwnedRuntime(cleanupOptions(), { remove: async () => result });
+    assert.equal(receipt.status, "failed");
+    assert.equal(receipt.errorCode, "CLEANUP_WORKER_FAILED");
+    const saved = JSON.stringify(receipt);
+    assert.ok(!saved.includes("synthetic-private"));
+    assert.ok(!saved.includes("private"));
+  }
+  const receipt = await cleanupOwnedRuntime(
+    {
+      ...cleanupOptions(),
+      identity: { path: join(tmpdir(), "synthetic-private-path"), dev: "1", ino: "2" },
+    },
+    { remove: async () => assert.fail("A non-owned path must not be removed.") },
+  );
+  assert.equal(receipt.errorCode, "CLEANUP_OWNERSHIP_UNVERIFIED");
+  assert.ok(!JSON.stringify(receipt).includes("synthetic-private"));
+});
+
+test("real credential-free cleanup worker verifies the same physical identity before deleting test-owned paths", async (t) => {
+  const root = await mkdtemp(join(await realpath(tmpdir()), "agentproof-cleanup-test-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const path = await mkdtemp(join(root, "agentproof-protocol-state-"));
+  const stat = await lstat(path, { bigint: true });
+  const identity = { path, dev: stat.dev.toString(), ino: stat.ino.toString() };
+  await writeFile(join(path, "synthetic-file"), "test-owned");
+  const altered = await cleanupOwnedRuntime({
+    ...cleanupOptions(() => 10_000),
+    identity: { ...identity, ino: `${stat.ino + 1n}` },
+  });
+  assert.equal(altered.status, "failed");
+  assert.equal(altered.errorCode, "OWNED_PATH_CHANGED");
+  assert.equal(await readFile(join(path, "synthetic-file"), "utf8"), "test-owned");
+  const receipt = await cleanupOwnedRuntime({ ...cleanupOptions(() => 10_000), identity });
+  assert.equal(receipt.status, "removed-after-exit");
+  assert.equal(receipt.attempts[0].pathVerified, true);
+  assert.equal(receipt.attempts[0].worker.exitObserved, true);
+  assert.equal(receipt.attempts[0].worker.streamsClosed, true);
+  assert.ok(receipt.attempts[0].worker.processId > 0);
+  assert.deepEqual(await readdir(root), []);
+});
+
+test("real cleanup worker refuses an owned-name junction or symlink rather than deleting its target", async (t) => {
+  const root = await mkdtemp(join(await realpath(tmpdir()), "agentproof-cleanup-link-test-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const target = join(root, "target");
+  await mkdir(target);
+  await writeFile(join(target, "synthetic-file"), "preserved");
+  const path = join(root, "agentproof-protocol-state-Alias1");
+  await symlink(target, path, process.platform === "win32" ? "junction" : "dir");
+  const stat = await lstat(path, { bigint: true });
+  const receipt = await cleanupOwnedRuntime({
+    ...cleanupOptions(() => 10_000),
+    identity: { path, dev: stat.dev.toString(), ino: stat.ino.toString() },
+  });
+  assert.equal(receipt.status, "failed");
+  assert.equal(receipt.errorCode, "OWNED_PATH_CHANGED");
+  assert.equal(await readFile(join(target, "synthetic-file"), "utf8"), "preserved");
+  await unlink(path);
+});
+
+test("real cleanup worker ignores inherited Node bootstrap settings and preserves missing-path errors", async (t) => {
+  const root = await mkdtemp(join(await realpath(tmpdir()), "agentproof-cleanup-env-test-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const path = await mkdtemp(join(root, "agentproof-protocol-state-"));
+  const stat = await lstat(path, { bigint: true });
+  const options = {
+    ...cleanupOptions(() => 10_000),
+    identity: { path, dev: stat.dev.toString(), ino: stat.ino.toString() },
+  };
+  const previous = { NODE_OPTIONS: process.env.NODE_OPTIONS, NODE_PATH: process.env.NODE_PATH };
+  try {
+    process.env.NODE_OPTIONS = "--synthetic-invalid-bootstrap-option";
+    process.env.NODE_PATH = "synthetic-unused-module-path";
+    const receipt = await cleanupOwnedRuntime(options);
+    assert.equal(receipt.status, "removed-after-exit");
+    assert.equal(receipt.attempts[0].worker.exitObserved, true);
+    assert.equal(receipt.attempts[0].worker.streamsClosed, true);
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+  const missing = await cleanupOwnedRuntime(options);
+  assert.equal(missing.status, "failed");
+  assert.equal(missing.errorCode, "ENOENT");
+  assert.equal(missing.firstErrorCode, "ENOENT");
+  assert.equal(missing.attempts.length, 1);
+  assert.equal(missing.attempts[0].stage, "verify-owned-path");
+  assert.equal(missing.attempts[0].worker.exitObserved, true);
+  assert.equal(missing.attempts[0].worker.streamsClosed, true);
+});
+
+test("a real cleanup worker timeout is failure, never requested-kill-as-cleanup proof", async (t) => {
+  const root = await mkdtemp(join(await realpath(tmpdir()), "agentproof-cleanup-timeout-test-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const path = await mkdtemp(join(root, "agentproof-protocol-state-"));
+  const stat = await lstat(path, { bigint: true });
+  const receipt = await cleanupOwnedRuntime({
+    ...cleanupOptions(() => 1),
+    identity: { path, dev: stat.dev.toString(), ino: stat.ino.toString() },
+  });
+  assert.equal(receipt.status, "failed");
+  assert.equal(receipt.errorCode, "CLEANUP_DEADLINE");
+  assert.equal(receipt.attempts.length, 1);
+  assert.equal(receipt.attempts[0].removed, false);
+  assert.equal(receipt.attempts[0].worker.exitObserved, true);
+  assert.equal(receipt.attempts[0].worker.streamsClosed, true);
 });

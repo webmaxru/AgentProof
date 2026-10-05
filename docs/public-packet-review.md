@@ -318,6 +318,56 @@ Do not add a request/prompt/evidence field or follow it with a model call.
 Unit success alone does not authorize even this state-only native observation,
 and a state-only result does not establish live review compatibility.
 
+### Session creation and start diagnostics
+
+State-only modes also retain at most one `sessionCreateDiagnostics` projection
+and two `sessionStartDiagnostics` projections, each capped at 4 KiB before
+storage. The creation projection uses the existing exact native frame bytes/hash,
+fixed known field names/types, redacted extra-key counts, required-field presence,
+and separate result-shape and requested-session-ID-match predicates. ID validity
+is a diagnostic boolean, not a new acceptance rule. Returned IDs, workspace paths,
+capability values, native error text, and arbitrary extra-key names are omitted.
+The recognized response keys and exact requested-ID requirement are unchanged.
+
+Start diagnostics instrument the actual guard evaluations in their existing
+short-circuit order, including the original clock calls and preincremented
+`sessionStarts` counter. Only evaluated predicates receive booleans; skipped
+predicates are explicitly listed in `notEvaluatedPredicates`, never defaulted
+to passing or reconstructed afterward. Fixed field types and missing-key lists
+contain no raw producer, version, ID, configuration, or private timestamp values.
+`observedSessionStarts` counts recognized start notifications, including rejected
+ones; `fullyValidatedSessionStarts` increments only after the complete existing
+start guard passes. The original counters retain their prior meaning.
+
+The first transport failure retains a fixed origin and, when observed at the
+start-notification or creation-diagnostic callback, its exact frame fingerprint.
+`failureProvenance` keeps that cause separate from an independently rejected host
+creation result. Start predicate identifiers are attributed only by matching the
+rejected projection's fingerprint; unavailable predicate evidence is explicit.
+The combined provenance record is also capped at 4 KiB, with at most one first
+transport cause and one host creation rejection. No raw native error strings are
+copied and neither cause replaces the other. Cross-origin chronology is
+`not-recorded`: matching frames and first-transport-error retention are not a
+reconstruction of native event timing.
+
+These additions change diagnostics, not acceptance. Null start-parent, timestamp
+format/window, freshness, version, authentication, session/profile, and capability
+guards remain unchanged. In particular, broader public type declarations do not
+authorize unknown response keys or establish which predicate failed in an older
+capture. The original top-level blocking outcome and error remain fail-closed.
+
+The separately authorized credential-bound observation at toolkit head
+`42ae3a2afaf906122699ec0096c8381a8aca1023` remains a historical **blocked** result.
+Its fresh same-token GitHub API owner proof passed while native login stayed
+absent. It stopped after four requests at the combined `session.create`
+shape/identity guard. A start counter of one without its post-guard timestamps
+was not complete lifecycle proof, and the static error text did not prove a
+different returned ID. These diagnostics do not recover discarded fields,
+relabel that receipt, or establish a corrected native result. Their regressions
+use synthetic frames, including a resolved response followed by a rejected start
+notification and a separate host result rejection in the same transport read.
+Any new native observation still requires separate authorization.
+
 ### Connect-only diagnostics
 
 `observeCopilotProtocol3Connect(options)` uses the same pinned executable/profile,

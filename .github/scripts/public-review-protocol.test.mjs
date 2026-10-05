@@ -35,12 +35,18 @@ import {
 import {
   MAX_CONNECT_DIAGNOSTICS_BYTES,
   MAX_AUTH_DIAGNOSTICS_BYTES,
+  MAX_SESSION_DIAGNOSTICS_BYTES,
+  MAX_SESSION_CREATE_DIAGNOSTICS,
+  MAX_SESSION_START_DIAGNOSTICS,
+  createSessionStartDiagnostic,
   observeCopilotProtocol3Auth,
   observeCopilotProtocol3Connect,
   observeCopilotProtocol3CredentialBoundState,
   observeCopilotProtocol3State,
   projectConnectResponse,
   projectAuthResponse,
+  projectSessionCreateResponse,
+  retainSessionDiagnostic,
 } from "./public-review-protocol.mjs";
 
 async function setup(t) {
@@ -74,6 +80,613 @@ async function setup(t) {
     },
   };
 }
+
+function sessionFingerprint(message) {
+  const bytes = encodeProtocolMessage(message);
+  return { rawResponseBytes: bytes.length, rawResponseSha256: sha256(bytes) };
+}
+
+const OTHER_SESSION_ID = `${SESSION_ID[0] === "0" ? "1" : "0"}${SESSION_ID.slice(1)}`;
+
+function createProjection(result, envelope = {}) {
+  const message = { jsonrpc: "2.0", id: 4, result, ...envelope };
+  return projectSessionCreateResponse(message, sessionFingerprint(message), 4, SESSION_ID);
+}
+
+test("session-create diagnostics retain types and exact-match facts, never private values", () => {
+  const privateValue = "synthetic-private-create-value";
+  const projection = createProjection({
+    sessionId: SESSION_ID,
+    workspacePath: privateValue,
+    capabilities: { [privateValue]: privateValue },
+  });
+  assert.deepEqual(projection.failedPredicates, []);
+  assert.deepEqual(projection.missingResultKeys, []);
+  assert.deepEqual(projection.sessionId, {
+    present: true,
+    type: "string",
+    valid: true,
+    exactExpectedMatch: true,
+  });
+  const saved = JSON.stringify(projection);
+  assert.ok(!saved.includes(SESSION_ID));
+  assert.ok(!saved.includes(privateValue));
+  assert.ok(Buffer.byteLength(saved) <= MAX_SESSION_DIAGNOSTICS_BYTES);
+  assert.equal(projection.result.keys.find(({ key }) => key === "workspacePath").type, "string");
+});
+
+for (const [label, result, shape, match, valid, missing] of [
+  ["missing identity", {}, false, false, false, true],
+  ["null result", null, false, false, false, true],
+  ["array result", [], false, false, false, true],
+  ["string result", "synthetic-private-result", false, false, false, true],
+  ["null identity", { sessionId: null }, true, false, false, false],
+  ["number identity", { sessionId: 17 }, true, false, false, false],
+  ["array identity", { sessionId: [SESSION_ID] }, true, false, false, false],
+  ["malformed identity", { sessionId: "synthetic-private-id" }, true, false, false, false],
+  ["different valid identity", { sessionId: OTHER_SESSION_ID }, true, false, true, false],
+  [
+    "extra private key",
+    { sessionId: SESSION_ID, "synthetic-private-key": "synthetic-private-value" },
+    false,
+    true,
+    true,
+    false,
+  ],
+  [
+    "unchanged optional-field acceptance",
+    { sessionId: SESSION_ID, workspacePath: 17, capabilities: false },
+    true,
+    true,
+    true,
+    false,
+  ],
+]) {
+  test(`session-create diagnostics distinguish ${label} without changing the guard`, () => {
+    const projection = createProjection(result);
+    assert.equal(projection.predicates.result_shape, shape);
+    assert.equal(projection.predicates.exact_requested_session_id, match);
+    assert.equal(projection.sessionId.valid, valid);
+    assert.equal(projection.missingResultKeys.includes("sessionId"), missing);
+    assert.ok(!JSON.stringify(projection).includes("synthetic-private"));
+  });
+}
+
+test("session-create diagnostics redact malformed/private envelopes and native errors", () => {
+  const projection = createProjection(
+    { sessionId: SESSION_ID, "synthetic-private-result-key": "synthetic-private-value" },
+    {
+      id: "synthetic-private-id",
+      "synthetic-private-envelope-key": "synthetic-private-value",
+      error: {
+        code: -32601,
+        message: "synthetic-private-error",
+        data: { private: "synthetic-private-value" },
+        "synthetic-private-error-key": true,
+      },
+    },
+  );
+  assert.equal(projection.envelope.redactedKeyCount, 1);
+  assert.equal(projection.result.redactedKeyCount, 1);
+  assert.equal(projection.error.redactedKeyCount, 1);
+  assert.equal(projection.errorCode, -32601);
+  assert.deepEqual(projection.error.keys, [{ key: "code", type: "number" }]);
+  assert.equal(projection.predicates.result_without_error, false);
+  assert.equal(projection.predicates.matching_numeric_id, false);
+  assert.ok(!JSON.stringify(projection).includes("synthetic-private"));
+  for (const code of [2147483648, -2147483648, 1.5, "synthetic-private-code"]) {
+    assert.equal(createProjection(undefined, { error: { code } }).errorCode, undefined);
+  }
+});
+
+for (const fingerprint of [
+  { rawResponseBytes: 0, rawResponseSha256: "a".repeat(64) },
+  { rawResponseBytes: 4 * 1024 * 1024 + 1, rawResponseSha256: "a".repeat(64) },
+  { rawResponseBytes: 17, rawResponseSha256: "synthetic-private-hash" },
+  { rawResponseBytes: 17, rawResponseSha256: "a".repeat(64), private: true },
+]) {
+  test("session diagnostics reject invalid frame fingerprints without retaining their values", () => {
+    for (const project of [
+      () => projectSessionCreateResponse({}, fingerprint, 4, SESSION_ID),
+      () => createSessionStartDiagnostic({}, fingerprint),
+    ]) {
+      assert.throws(project, (error) => {
+        assert.equal(error.code, "AP_REVIEW_PROTOCOL_STATE_REJECTED");
+        assert.ok(!String(error).includes("synthetic-private"));
+        return true;
+      });
+    }
+  });
+}
+
+test("session diagnostic storage enforces exact byte and per-kind count ceilings", () => {
+  assert.equal(
+    projectSessionCreateResponse(
+      { jsonrpc: "2.0", id: 4, result: { sessionId: SESSION_ID } },
+      { rawResponseBytes: 4 * 1024 * 1024, rawResponseSha256: "a".repeat(64) },
+      4,
+      SESSION_ID,
+    ).rawResponseBytes,
+    4 * 1024 * 1024,
+  );
+  for (const [kind, limit] of [
+    ["sessionCreateDiagnostics", MAX_SESSION_CREATE_DIAGNOSTICS],
+    ["sessionStartDiagnostics", MAX_SESSION_START_DIAGNOSTICS],
+  ]) {
+    const receipt = {};
+    const projection = {
+      padding: "x".repeat(MAX_SESSION_DIAGNOSTICS_BYTES - Buffer.byteLength('{"padding":""}')),
+    };
+    assert.equal(Buffer.byteLength(JSON.stringify(projection)), 4096);
+    for (let index = 0; index < limit; index++) retainSessionDiagnostic(receipt, kind, projection);
+    assert.equal(receipt[kind].length, limit);
+    assert.throws(() => retainSessionDiagnostic(receipt, kind, projection), /count bound/u);
+    projection.padding += "x";
+    assert.equal(
+      Buffer.byteLength(JSON.stringify(receipt[kind][0])),
+      4096,
+      "saved copy is detached",
+    );
+    const emptyReceipt = {};
+    assert.throws(() => retainSessionDiagnostic(emptyReceipt, kind, projection), /safe bound/u);
+    assert.equal(Object.hasOwn(emptyReceipt, kind), false);
+  }
+  assert.throws(() => retainSessionDiagnostic({}, "synthetic-private-kind", {}), /count bound/u);
+  assert.throws(
+    () => retainSessionDiagnostic({ sessionStartDiagnostics: null }, "sessionStartDiagnostics", {}),
+    /count bound/u,
+  );
+});
+
+test("session-start diagnostics redact private data and explicitly preserve unevaluated predicates", () => {
+  const message = sessionEvent(SESSION_ID, "session.start", {
+    sessionId: "synthetic-private-id",
+    startTime: "synthetic-private-timestamp",
+    producer: "synthetic-private-producer",
+    "synthetic-private-key": { context: "synthetic-private-value" },
+  });
+  message.params.event["synthetic-private-envelope-key"] = true;
+  const diagnostic = createSessionStartDiagnostic(message.params, sessionFingerprint(message));
+  assert.equal(diagnostic.check("notification_session_id", true), true);
+  assert.equal(diagnostic.check("event_shape", false), false);
+  const projection = diagnostic.snapshot(false);
+  assert.deepEqual(projection.failedPredicates, ["event_shape"]);
+  assert.ok(projection.notEvaluatedPredicates.includes("start_not_future"));
+  assert.equal(Object.hasOwn(projection.predicates, "start_not_future"), false);
+  assert.equal(projection.data.redactedKeyCount, 1);
+  assert.equal(projection.event.redactedKeyCount, 1);
+  assert.deepEqual(projection.missingDataKeys, ["copilotVersion", "version"]);
+  assert.ok(!JSON.stringify(projection).includes("synthetic-private"));
+  assert.ok(Buffer.byteLength(JSON.stringify(projection)) <= MAX_SESSION_DIAGNOSTICS_BYTES);
+  assert.throws(() => diagnostic.check("event_shape", true), /predicate is invalid/u);
+  assert.throws(() => diagnostic.check("synthetic-private-key", false), /predicate is invalid/u);
+  assert.throws(
+    () => diagnostic.check("data_object", "synthetic-private-value"),
+    /predicate is invalid/u,
+  );
+  assert.throws(() => diagnostic.snapshot(true), /validation state is invalid/u);
+});
+
+for (const data of [undefined, null, [], "synthetic-private-data", 17]) {
+  test("session-start diagnostic field projection handles missing or malformed data without defaults", () => {
+    const message = sessionEvent(SESSION_ID, "session.start", data);
+    const projection = createSessionStartDiagnostic(
+      message.params,
+      sessionFingerprint(message),
+    ).snapshot(false);
+    assert.equal(projection.fullyValidated, false);
+    assert.deepEqual(projection.predicates, {});
+    assert.ok(projection.notEvaluatedPredicates.length > 0);
+    assert.equal(projection.missingDataKeys.length, 5);
+    assert.ok(!JSON.stringify(projection).includes("synthetic-private"));
+  });
+}
+
+function rejectedCreationChild({
+  mutateStart = () => {},
+  mutateResult = () => {},
+  extraStart = false,
+  nativeLoginAbsent = false,
+} = {}) {
+  const fixture = protocolStateFixture();
+  if (nativeLoginAbsent) delete fixture["auth.getStatus"].login;
+  return fakeProtocolChild((message, child) => {
+    if (message.method !== "session.create") {
+      assert.ok(
+        ["connect", "status.get", "auth.getStatus"].includes(message.method),
+        "no later RPC is permitted",
+      );
+      child.stdout.write(
+        encodeProtocolMessage({
+          jsonrpc: "2.0",
+          id: message.id,
+          result: fixture[message.method],
+        }),
+      );
+      return;
+    }
+    const result = { sessionId: message.params.sessionId };
+    mutateResult(result);
+    const start = sessionEvent(message.params.sessionId, "session.start", {
+      sessionId: message.params.sessionId,
+      version: 1,
+      producer: "synthetic-private-producer",
+      copilotVersion: "1.0.92-3",
+      startTime: new Date().toISOString(),
+    });
+    mutateStart(start);
+    const frames = [
+      encodeProtocolMessage({ jsonrpc: "2.0", id: message.id, result }),
+      encodeProtocolMessage(start),
+    ];
+    if (extraStart) {
+      const second = structuredClone(start);
+      second.params.event.id = OTHER_SESSION_ID;
+      frames.push(encodeProtocolMessage(second));
+    }
+    child.stdout.write(Buffer.concat(frames));
+  });
+}
+
+for (const [label, mutateStart, predicate, oldStarts] of [
+  [
+    "wrong notification session",
+    (start) => {
+      start.params.sessionId = "synthetic-private-id";
+    },
+    "notification_session_id",
+    0,
+  ],
+  [
+    "extra event parameter",
+    (start) => {
+      start.params["synthetic-private-key"] = true;
+    },
+    "event_parameters",
+    0,
+  ],
+  [
+    "missing event field",
+    (start) => {
+      delete start.params.event.timestamp;
+    },
+    "event_shape",
+    0,
+  ],
+  [
+    "extra event field",
+    (start) => {
+      start.params.event["synthetic-private-key"] = true;
+    },
+    "event_shape",
+    0,
+  ],
+  [
+    "invalid event ID",
+    (start) => {
+      start.params.event.id = "synthetic-private-id";
+    },
+    "event_id_valid",
+    0,
+  ],
+  [
+    "private event timestamp",
+    (start) => {
+      start.params.event.timestamp = "synthetic-private-timestamp";
+    },
+    "event_timestamp_format",
+    0,
+  ],
+  [
+    "past event",
+    (start) => {
+      start.params.event.timestamp = new Date(0).toISOString();
+    },
+    "event_not_before_observation",
+    0,
+  ],
+  [
+    "future event",
+    (start) => {
+      start.params.event.timestamp = new Date(Date.now() + 60_000).toISOString();
+    },
+    "event_not_future",
+    0,
+  ],
+  [
+    "malformed parent",
+    (start) => {
+      start.params.event.parentId = "synthetic-private-parent";
+    },
+    "parent_id_valid",
+    0,
+  ],
+  [
+    "malformed ephemeral",
+    (start) => {
+      start.params.event.ephemeral = "synthetic-private-value";
+    },
+    "ephemeral_boolean",
+    0,
+  ],
+  [
+    "agent-owned event",
+    (start) => {
+      start.params.event.agentId = "synthetic-private-agent";
+    },
+    "no_agent_id",
+    0,
+  ],
+  [
+    "null start data",
+    (start) => {
+      start.params.event.data = null;
+    },
+    "data_object",
+    0,
+  ],
+  [
+    "wrong data session",
+    (start) => {
+      start.params.event.data.sessionId = "synthetic-private-id";
+    },
+    "data_session_id",
+    1,
+  ],
+  [
+    "non-null valid parent",
+    (start) => {
+      start.params.event.parentId = SESSION_ID;
+    },
+    "root_parent_null",
+    1,
+  ],
+  [
+    "different version",
+    (start) => {
+      start.params.event.data.copilotVersion = "synthetic-private-version";
+    },
+    "pinned_start_version",
+    1,
+  ],
+  [
+    "missing producer",
+    (start) => {
+      delete start.params.event.data.producer;
+    },
+    "producer_string",
+    1,
+  ],
+  [
+    "fractional schema version",
+    (start) => {
+      start.params.event.data.version = 1.5;
+    },
+    "schema_version_integer",
+    1,
+  ],
+  [
+    "non-millisecond ISO time",
+    (start) => {
+      start.params.event.data.startTime = new Date().toISOString().replace(/\.\d{3}Z/u, "Z");
+    },
+    "start_timestamp_format",
+    1,
+  ],
+  [
+    "past start",
+    (start) => {
+      start.params.event.data.startTime = new Date(0).toISOString();
+    },
+    "start_not_before_observation",
+    1,
+  ],
+  [
+    "future start",
+    (start) => {
+      start.params.event.data.startTime = new Date(Date.now() + 60_000).toISOString();
+    },
+    "start_not_future",
+    1,
+  ],
+  [
+    "already in use",
+    (start) => {
+      start.params.event.data.alreadyInUse = true;
+    },
+    "not_already_in_use",
+    1,
+  ],
+  [
+    "malformed remote state",
+    (start) => {
+      start.params.event.data.remoteSteerable = null;
+    },
+    "not_remote_steerable",
+    1,
+  ],
+  [
+    "detached parent present",
+    (start) => {
+      start.params.event.data.detachedFromSpawningParentSessionId = "synthetic-private-parent";
+    },
+    "no_detached_parent",
+    1,
+  ],
+]) {
+  test(`session-start diagnostics preserve rejection of ${label} and actual short-circuit predicates`, async (t) => {
+    const { options, dependencies } = await setup(t);
+    const child = rejectedCreationChild({ mutateStart });
+    await assert.rejects(
+      observeCopilotProtocol3State(options, { ...dependencies, spawnNative: () => child }),
+      {
+        code: "AP_REVIEW_PROTOCOL_STATE_REJECTED",
+      },
+    );
+    const receipt = JSON.parse(
+      await readFile(join(options.captureDirectory, "protocol-state-receipt.json"), "utf8"),
+    );
+    assert.equal(receipt.events.sessionStarts, oldStarts);
+    assert.equal(receipt.events.observedSessionStarts, 1);
+    assert.equal(receipt.events.fullyValidatedSessionStarts, 0);
+    assert.equal(receipt.sessionStartDiagnostics.length, 1);
+    const projection = receipt.sessionStartDiagnostics[0];
+    assert.deepEqual(projection.failedPredicates, [predicate]);
+    assert.equal(projection.predicates[predicate], false);
+    assert.equal(projection.fullyValidated, false);
+    assert.ok(Buffer.byteLength(JSON.stringify(projection)) <= 4096);
+    assert.ok(!JSON.stringify(receipt).includes("synthetic-private"));
+    assert.equal(receipt.native.requestCount, 4);
+    assert.equal(receipt.native.responseCount, 4);
+    assert.equal(receipt.native.reverseRequestCount, 0);
+    assert.equal(receipt.native.firstFailure.origin, "session-start-notification");
+    assert.deepEqual(receipt.failureProvenance.firstTransport.failedPredicates, [predicate]);
+    assert.equal(receipt.failureProvenance.firstTransport.predicateEvidence, "observed");
+    assert.equal(receipt.hostRejection, undefined);
+    assert.equal(receipt.native.exitObserved, true);
+    assert.equal(receipt.native.streamsClosed, true);
+  });
+}
+
+for (const [label, mutateResult, rejectedPredicate] of [
+  [
+    "shape",
+    (result) => {
+      result["synthetic-private-key"] = "synthetic-private-value";
+    },
+    "result_shape",
+  ],
+  [
+    "ID",
+    (result) => {
+      result.sessionId = "synthetic-private-id";
+    },
+    "exact_requested_session_id",
+  ],
+]) {
+  test(`session rejection provenance preserves both same-read start and host ${label} causes`, async (t) => {
+    const { options, dependencies } = await setup(t);
+    const child = rejectedCreationChild({
+      mutateResult,
+      mutateStart: (start) => {
+        start.params.event.parentId = SESSION_ID;
+      },
+    });
+    await assert.rejects(
+      observeCopilotProtocol3State(options, { ...dependencies, spawnNative: () => child }),
+      {
+        code: "AP_REVIEW_PROTOCOL_STATE_REJECTED",
+      },
+    );
+    const receipt = JSON.parse(
+      await readFile(join(options.captureDirectory, "protocol-state-receipt.json"), "utf8"),
+    );
+    assert.equal(receipt.blockedReason, "Native session creation returned another identity.");
+    assert.equal(receipt.native.firstFailure.origin, "session-start-notification");
+    assert.equal(receipt.native.errorCode, "AP_REVIEW_PROTOCOL_STATE_REJECTED");
+    assert.equal(receipt.failureProvenance.firstTransport.origin, "session-start-notification");
+    assert.deepEqual(receipt.failureProvenance.firstTransport.failedPredicates, [
+      "root_parent_null",
+    ]);
+    assert.deepEqual(receipt.failureProvenance.hostRejection.failedPredicates, [rejectedPredicate]);
+    assert.equal(receipt.failureProvenance.hostRejection.origin, "session-create-result");
+    assert.equal(receipt.failureProvenance.crossOriginChronology, "not-recorded");
+    assert.equal(receipt.sessionCreateDiagnostics.length, 1);
+    assert.equal(receipt.sessionStartDiagnostics.length, 1);
+    assert.equal(receipt.events.sessionStarts, 1);
+    assert.equal(receipt.events.fullyValidatedSessionStarts, 0);
+    assert.equal(receipt.native.requestCount, 4);
+    assert.equal(receipt.native.responseCount, 4);
+    assert.equal(receipt.native.notificationCount, 1);
+    assert.equal(receipt.native.reverseRequestCount, 0);
+    assert.deepEqual(receipt.native.requestMethods, [
+      "connect",
+      "status.get",
+      "auth.getStatus",
+      "session.create",
+    ]);
+    assert.ok(Buffer.byteLength(JSON.stringify(receipt.failureProvenance)) <= 4096);
+    assert.ok(!JSON.stringify(receipt).includes("synthetic-private"));
+    assert.equal(receipt.cleanup.status, "removed-after-exit");
+  });
+}
+
+test("session rejection provenance identifies a host abort without inventing a native predicate", async (t) => {
+  const { options, dependencies } = await setup(t);
+  const child = rejectedCreationChild({
+    mutateResult: (result) => {
+      result.extra = true;
+    },
+  });
+  await assert.rejects(
+    observeCopilotProtocol3State(options, { ...dependencies, spawnNative: () => child }),
+  );
+  const receipt = JSON.parse(
+    await readFile(join(options.captureDirectory, "protocol-state-receipt.json"), "utf8"),
+  );
+  assert.equal(receipt.events.fullyValidatedSessionStarts, 1);
+  assert.equal(receipt.native.firstFailure.origin, "host-abort");
+  assert.equal(receipt.failureProvenance.firstTransport.predicateEvidence, "unavailable");
+  assert.equal(receipt.failureProvenance.firstTransport.failedPredicates, undefined);
+  assert.deepEqual(receipt.hostRejection.failedPredicates, ["result_shape"]);
+});
+
+test("credential-bound session diagnostics retain both rejection causes without synthesizing login", async (t) => {
+  const { options, dependencies } = await setup(t);
+  const http = credentialHttpFixture();
+  const child = rejectedCreationChild({
+    nativeLoginAbsent: true,
+    mutateResult: (result) => {
+      result.private = true;
+    },
+    mutateStart: (start) => {
+      start.params.event.data.version = "synthetic-private-version";
+    },
+  });
+  await assert.rejects(
+    observeCopilotProtocol3CredentialBoundState(options, {
+      ...dependencies,
+      spawnNative: () => child,
+      requestCredentialOwner: http.requestNative,
+    }),
+  );
+  const receipt = JSON.parse(
+    await readFile(
+      join(options.captureDirectory, "protocol-credential-state-receipt.json"),
+      "utf8",
+    ),
+  );
+  assert.equal(http.calls.length, 1, "synthetic HTTP fixture only");
+  assert.equal(receipt.nativeAuthentication[0].login.present, false);
+  assert.equal(receipt.credentialOwner.authority, "github-rest-authenticated-user");
+  assert.deepEqual(receipt.failureProvenance.firstTransport.failedPredicates, [
+    "schema_version_integer",
+  ]);
+  assert.deepEqual(receipt.failureProvenance.hostRejection.failedPredicates, ["result_shape"]);
+  assert.equal(receipt.native.requestCount, 4);
+  assert.equal(receipt.native.reverseRequestCount, 0);
+  assert.equal(receipt.status, "blocked");
+  assert.equal(receipt.modelInventoryStatus, "unknown");
+});
+
+test("session-start diagnostics preserve observed, original and validated counts on duplicate starts", async (t) => {
+  const { options, dependencies } = await setup(t);
+  const child = rejectedCreationChild({ extraStart: true });
+  await assert.rejects(
+    observeCopilotProtocol3State(options, { ...dependencies, spawnNative: () => child }),
+  );
+  const receipt = JSON.parse(
+    await readFile(join(options.captureDirectory, "protocol-state-receipt.json"), "utf8"),
+  );
+  assert.equal(receipt.events.observedSessionStarts, 2);
+  assert.equal(receipt.events.sessionStarts, 2);
+  assert.equal(receipt.events.fullyValidatedSessionStarts, 1);
+  assert.equal(receipt.sessionStartDiagnostics.length, 2);
+  assert.equal(receipt.sessionStartDiagnostics[0].fullyValidated, true);
+  assert.deepEqual(receipt.sessionStartDiagnostics[1].failedPredicates, ["single_start"]);
+  assert.deepEqual(receipt.failureProvenance.firstTransport.failedPredicates, ["single_start"]);
+  assert.equal(receipt.native.requestCount, 4);
+});
 
 // Synthetic identity projections of the public GitHub /user schema, not native API proof.
 function credentialHttpFixture({
@@ -459,6 +1072,14 @@ for (const nativeLoginPresent of [false, true]) {
     assert.equal(receipt.cleanup.status, "removed-after-exit");
     assert.equal(receipt.events.modelEvents, 0);
     assert.equal(receipt.events.toolOrPermissionEvents, 0);
+    assert.equal(receipt.events.observedSessionStarts, 1);
+    assert.equal(receipt.events.sessionStarts, 1);
+    assert.equal(receipt.events.fullyValidatedSessionStarts, 1);
+    assert.deepEqual(receipt.sessionCreateDiagnostics[0].failedPredicates, []);
+    assert.equal(receipt.sessionStartDiagnostics[0].fullyValidated, true);
+    assert.deepEqual(receipt.sessionStartDiagnostics[0].notEvaluatedPredicates, []);
+    assert.deepEqual(receipt.sessionStartDiagnostics[0].failedPredicates, []);
+    assert.equal(receipt.failureProvenance, undefined);
     assert.ok(!JSON.stringify(child.messages).includes("synthetic-fixture-native-auth"));
     const saved = await readFile(
       join(options.captureDirectory, "protocol-credential-state-receipt.json"),

@@ -138,6 +138,103 @@ test("notifications are registered before the first request is written", async (
   await transport.finish();
 });
 
+test("session-create callback captures the exact native frame before response rejection", async () => {
+  const body = Buffer.from('{ "jsonrpc": "2.0", "id": "wrong-id", "result": {} }\n');
+  const frame = Buffer.concat([Buffer.from(`content-length: ${body.length}\r\n\r\n`), body]);
+  const child = fakeProtocolChild((message, native) => native.stdout.write(frame));
+  const captures = [];
+  const transport = open(child, {
+    onSessionCreateResponse: (message, fingerprint, expectedId) => {
+      captures.push({ fingerprint, expectedId, idType: typeof message.id });
+    },
+  });
+  await assert.rejects(transport.request("session.create", {}), /response identity/u);
+  await transport.finish();
+  assert.deepEqual(captures, [
+    {
+      fingerprint: {
+        rawResponseBytes: frame.length,
+        rawResponseSha256: createHash("sha256").update(frame).digest("hex"),
+      },
+      expectedId: 1,
+      idType: "string",
+    },
+  ]);
+});
+
+test("session notification failure preserves its first safe origin after a resolved response and abort", async () => {
+  const notification = encodeProtocolMessage({
+    jsonrpc: "2.0",
+    method: "session.event",
+    params: { event: { type: "session.start", private: "synthetic-private-value" } },
+  });
+  const child = fakeProtocolChild((message, native) => {
+    native.stdout.write(
+      Buffer.concat([
+        encodeProtocolMessage({ jsonrpc: "2.0", id: message.id, result: {} }),
+        notification,
+      ]),
+    );
+  });
+  let seenFingerprint;
+  const transport = open(child, {
+    onNotification(method, params, fingerprint) {
+      seenFingerprint = fingerprint;
+      throw new Error("synthetic-private-error");
+    },
+  });
+  assert.deepEqual(await transport.request("session.create", {}), {});
+  const original = transport.error;
+  transport.abort();
+  await assert.rejects(transport.request("status.get", {}), (error) => error === original);
+  await transport.finish();
+  assert.deepEqual(transport.metadata().firstFailure, {
+    origin: "session-start-notification",
+    rawResponseBytes: notification.length,
+    rawResponseSha256: createHash("sha256").update(notification).digest("hex"),
+  });
+  assert.deepEqual(seenFingerprint, {
+    rawResponseBytes: notification.length,
+    rawResponseSha256: createHash("sha256").update(notification).digest("hex"),
+  });
+  assert.equal(transport.metadata().requestCount, 1);
+  assert.equal(transport.metadata().responseCount, 1);
+  assert.equal(transport.metadata().notificationCount, 1);
+  assert.equal(transport.metadata().errorCode, "AP_REVIEW_PROTOCOL_INVALID");
+  assert.ok(!JSON.stringify(transport.metadata()).includes("synthetic-private"));
+});
+
+test("session-create projection failure is distinct from a host result rejection", async () => {
+  const child = fakeProtocolChild((message, native) => {
+    native.stdout.write(encodeProtocolMessage({ jsonrpc: "2.0", id: message.id, result: {} }));
+  });
+  const transport = open(child, {
+    onSessionCreateResponse() {
+      throw new Error("synthetic-private-projection-error");
+    },
+  });
+  await assert.rejects(transport.request("session.create", {}));
+  await transport.finish();
+  assert.equal(transport.metadata().firstFailure.origin, "session-create-diagnostics");
+  assert.equal(transport.metadata().responseCount, 0);
+  assert.ok(!JSON.stringify(transport.metadata()).includes("synthetic-private"));
+});
+
+test("an unsolicited duplicate creation response is not stored as another requested diagnostic", async () => {
+  const child = fakeProtocolChild((message, native) => {
+    const response = encodeProtocolMessage({ jsonrpc: "2.0", id: message.id, result: {} });
+    native.stdout.write(Buffer.concat([response, response]));
+  });
+  let captures = 0;
+  const transport = open(child, { onSessionCreateResponse: () => captures++ });
+  assert.deepEqual(await transport.request("session.create", {}), {});
+  await transport.finish();
+  assert.equal(captures, 1);
+  assert.equal(transport.metadata().errorCode, "AP_REVIEW_PROTOCOL_RESPONSE_INVALID");
+  assert.equal(transport.metadata().requestCount, 1);
+  assert.equal(transport.metadata().responseCount, 1);
+});
+
 for (const [label, response] of [
   ["wrong id", { jsonrpc: "2.0", id: 99, result: {} }],
   ["string id", { jsonrpc: "2.0", id: "1", result: {} }],

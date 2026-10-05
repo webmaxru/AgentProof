@@ -28,6 +28,9 @@ export const PROTOCOL_CREDENTIAL_STATE_ADAPTER =
   "experimental-protocol-3-credential-bound-state-v1";
 export const MAX_CONNECT_DIAGNOSTICS_BYTES = 4096;
 export const MAX_AUTH_DIAGNOSTICS_BYTES = 4096;
+export const MAX_SESSION_DIAGNOSTICS_BYTES = 4096;
+export const MAX_SESSION_CREATE_DIAGNOSTICS = 1;
+export const MAX_SESSION_START_DIAGNOSTICS = 2;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const DIGEST = /^[0-9a-f]{64}$/u;
 const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}(Z|[+-]\d{2}:\d{2})$/u;
@@ -97,6 +100,211 @@ function projectedKeys(value, allowed) {
       .map((key) => ({ key, type: diagnosticType(value[key]) })),
     redactedKeyCount: Object.keys(value).filter((key) => !allowed.includes(key)).length,
   };
+}
+
+function requireSessionFingerprint(fingerprint) {
+  requireState(
+    exactKeys(fingerprint, ["rawResponseBytes", "rawResponseSha256"]) &&
+      Number.isSafeInteger(fingerprint.rawResponseBytes) &&
+      fingerprint.rawResponseBytes > 0 &&
+      fingerprint.rawResponseBytes <= MAX_PROTOCOL_BYTES &&
+      DIGEST.test(fingerprint.rawResponseSha256),
+    "Native session diagnostic fingerprint is invalid.",
+  );
+}
+
+function boundedSessionDiagnostic(projection) {
+  requireState(
+    object(projection) &&
+      Buffer.byteLength(JSON.stringify(projection)) <= MAX_SESSION_DIAGNOSTICS_BYTES,
+    "Native session diagnostics exceed their fixed safe bound.",
+  );
+  return projection;
+}
+
+export function retainSessionDiagnostic(receipt, kind, projection) {
+  const limits = {
+    sessionCreateDiagnostics: MAX_SESSION_CREATE_DIAGNOSTICS,
+    sessionStartDiagnostics: MAX_SESSION_START_DIAGNOSTICS,
+  };
+  requireState(
+    Object.hasOwn(limits, kind) &&
+      (!Object.hasOwn(receipt, kind) || Array.isArray(receipt[kind])) &&
+      (receipt[kind]?.length ?? 0) < limits[kind],
+    "Native session diagnostic storage exceeds its fixed count bound.",
+  );
+  const saved = JSON.parse(JSON.stringify(boundedSessionDiagnostic(projection)));
+  receipt[kind] ??= [];
+  receipt[kind].push(saved);
+  return saved;
+}
+
+export function projectSessionCreateResponse(message, fingerprint, expectedId, expectedSessionId) {
+  requireSessionFingerprint(fingerprint);
+  requireState(UUID.test(expectedSessionId), "Expected session diagnostic identity is invalid.");
+  const resultPresent = object(message) && Object.hasOwn(message, "result");
+  const errorPresent = object(message) && Object.hasOwn(message, "error");
+  const result = resultPresent ? message.result : undefined;
+  const present = object(result) && Object.hasOwn(result, "sessionId");
+  const predicates = {
+    envelope_object: object(message),
+    jsonrpc_2: object(message) && message.jsonrpc === "2.0",
+    matching_numeric_id:
+      object(message) && Number.isInteger(message.id) && message.id === expectedId,
+    response_keys: exactKeys(message, ["jsonrpc", "id"], ["result", "error"]),
+    result_without_error: resultPresent && !errorPresent,
+    result_shape: exactKeys(result, ["sessionId"], ["workspacePath", "capabilities"]),
+    exact_requested_session_id: object(result) && result.sessionId === expectedSessionId,
+  };
+  const errorKeys = projectedKeys(errorPresent ? message.error : undefined, [
+    "code",
+    "message",
+    "data",
+  ]);
+  errorKeys.keys = errorKeys.keys.filter(({ key }) => key === "code");
+  const projection = {
+    ...fingerprint,
+    resultPresent,
+    errorPresent,
+    envelope: projectedKeys(message, ["jsonrpc", "id", "result", "error"]),
+    result: projectedKeys(result, ["sessionId", "workspacePath", "capabilities"]),
+    error: errorKeys,
+    sessionId: {
+      present,
+      type: present ? diagnosticType(result.sessionId) : "missing",
+      valid: present && typeof result.sessionId === "string" && UUID.test(result.sessionId),
+      exactExpectedMatch: predicates.exact_requested_session_id,
+    },
+    missingResultKeys: present ? [] : ["sessionId"],
+    predicates,
+    failedPredicates: Object.keys(predicates).filter((key) => !predicates[key]),
+  };
+  if (
+    errorPresent &&
+    Number.isSafeInteger(message.error?.code) &&
+    Math.abs(message.error.code) <= 2147483647
+  )
+    projection.errorCode = message.error.code;
+  return boundedSessionDiagnostic(projection);
+}
+
+const SESSION_START_PREDICATES = [
+  "notification_session_id",
+  "event_parameters",
+  "event_shape",
+  "event_id_valid",
+  "event_id_unseen",
+  "event_timestamp_format",
+  "event_not_before_observation",
+  "event_not_future",
+  "parent_id_valid",
+  "ephemeral_boolean",
+  "no_agent_id",
+  "data_object",
+  "no_user_events",
+  "no_model_events",
+  "no_tool_permission_events",
+  "single_start",
+  "data_session_id",
+  "root_parent_null",
+  "pinned_start_version",
+  "producer_string",
+  "schema_version_integer",
+  "start_timestamp_format",
+  "start_not_before_observation",
+  "start_not_future",
+  "not_already_in_use",
+  "not_remote_steerable",
+  "no_detached_parent",
+];
+
+export function createSessionStartDiagnostic(params, fingerprint) {
+  requireSessionFingerprint(fingerprint);
+  const event = object(params) ? params.event : undefined;
+  const data = object(event) ? event.data : undefined;
+  const requiredData = ["sessionId", "copilotVersion", "producer", "version", "startTime"];
+  const fields = {
+    ...fingerprint,
+    notification: projectedKeys(params, ["sessionId", "event"]),
+    event: projectedKeys(event, [
+      "id",
+      "parentId",
+      "timestamp",
+      "type",
+      "data",
+      "ephemeral",
+      "agentId",
+    ]),
+    data: projectedKeys(data, [
+      ...requiredData,
+      "alreadyInUse",
+      "remoteSteerable",
+      "detachedFromSpawningParentSessionId",
+    ]),
+    missingDataKeys: requiredData.filter((key) => !object(data) || !Object.hasOwn(data, key)),
+  };
+  const predicates = {};
+  return {
+    check(key, value) {
+      requireState(
+        SESSION_START_PREDICATES.includes(key) &&
+          !Object.hasOwn(predicates, key) &&
+          typeof value === "boolean",
+        "Native session-start diagnostic predicate is invalid.",
+      );
+      predicates[key] = value;
+      return value;
+    },
+    snapshot(fullyValidated) {
+      requireState(
+        typeof fullyValidated === "boolean" &&
+          (!fullyValidated || SESSION_START_PREDICATES.every((key) => predicates[key] === true)),
+        "Native session-start diagnostic validation state is invalid.",
+      );
+      return boundedSessionDiagnostic({
+        ...fields,
+        predicates: { ...predicates },
+        failedPredicates: SESSION_START_PREDICATES.filter((key) => predicates[key] === false),
+        notEvaluatedPredicates: SESSION_START_PREDICATES.filter(
+          (key) => !Object.hasOwn(predicates, key),
+        ),
+        fullyValidated,
+      });
+    },
+  };
+}
+
+function failureProvenance(receipt) {
+  const first = receipt.native?.firstFailure;
+  if (!first && !receipt.hostRejection) return;
+  const projection =
+    first?.origin === "session-start-notification"
+      ? receipt.sessionStartDiagnostics?.find(
+          (value) =>
+            !value.fullyValidated &&
+            value.rawResponseSha256 === first.rawResponseSha256 &&
+            value.rawResponseBytes === first.rawResponseBytes,
+        )
+      : undefined;
+  receipt.failureProvenance = boundedSessionDiagnostic({
+    ...(first
+      ? {
+          firstTransport: {
+            ...first,
+            errorCode: receipt.native.errorCode,
+            predicateEvidence: projection ? "observed" : "unavailable",
+            ...(projection
+              ? {
+                  failedPredicates: projection.failedPredicates,
+                  notEvaluatedPredicates: projection.notEvaluatedPredicates,
+                }
+              : {}),
+          },
+        }
+      : {}),
+    ...(receipt.hostRejection ? { hostRejection: receipt.hostRejection } : {}),
+    crossOriginChronology: "not-recorded",
+  });
 }
 
 export function projectConnectResponse(message, fingerprint, expectedId) {
@@ -404,7 +612,7 @@ function publicAgentIdentity(agent, profile) {
   );
 }
 
-function observeNotifications(sessionId, expectedName) {
+function observeNotifications(sessionId, expectedName, receipt) {
   const seen = new Set();
   const earliest = Date.now();
   const counts = {
@@ -413,143 +621,181 @@ function observeNotifications(sessionId, expectedName) {
     userMessages: 0,
     modelEvents: 0,
     toolOrPermissionEvents: 0,
+    observedSessionStarts: 0,
+    fullyValidatedSessionStarts: 0,
   };
-  return {
-    counts,
-    receive(method, params) {
+  function validateNotification(method, params, check) {
+    requireState(
+      check("notification_session_id", params.sessionId === sessionId),
+      "Native notification belongs to another session.",
+    );
+    if (method === "session.lifecycle") {
       requireState(
-        params.sessionId === sessionId,
-        "Native notification belongs to another session.",
+        exactKeys(params, ["sessionId", "type"], ["metadata"]) &&
+          ["session.created", "session.updated", "session.deleted"].includes(params.type),
+        "Native lifecycle notification is unsupported or describes a resumed session.",
       );
-      if (method === "session.lifecycle") {
+      if (params.type !== "session.deleted") {
         requireState(
-          exactKeys(params, ["sessionId", "type"], ["metadata"]) &&
-            ["session.created", "session.updated", "session.deleted"].includes(params.type),
-          "Native lifecycle notification is unsupported or describes a resumed session.",
+          exactKeys(params.metadata, ["startTime", "modifiedTime"], ["summary"]) &&
+            TIMESTAMP.test(params.metadata.startTime) &&
+            TIMESTAMP.test(params.metadata.modifiedTime),
+          "Native lifecycle metadata is missing or malformed.",
         );
-        if (params.type !== "session.deleted") {
-          requireState(
-            exactKeys(params.metadata, ["startTime", "modifiedTime"], ["summary"]) &&
-              TIMESTAMP.test(params.metadata.startTime) &&
-              TIMESTAMP.test(params.metadata.modifiedTime),
-            "Native lifecycle metadata is missing or malformed.",
-          );
-        } else {
-          requireState(
-            !Object.hasOwn(params, "metadata"),
-            "Deleted native session has unexpected lifecycle metadata.",
-          );
-        }
-        return;
+      } else {
+        requireState(
+          !Object.hasOwn(params, "metadata"),
+          "Deleted native session has unexpected lifecycle metadata.",
+        );
       }
-      const event = params.event;
-      requireState(
-        exactKeys(params, ["sessionId", "event"]) &&
+      return;
+    }
+    const event = params.event;
+    requireState(
+      check("event_parameters", exactKeys(params, ["sessionId", "event"])) &&
+        check(
+          "event_shape",
           exactKeys(
             event,
             ["id", "parentId", "timestamp", "type", "data"],
             ["ephemeral", "agentId"],
-          ) &&
-          UUID.test(event.id) &&
-          !seen.has(event.id) &&
-          TIMESTAMP.test(event.timestamp) &&
-          Date.parse(event.timestamp) >= earliest &&
-          Date.parse(event.timestamp) <= Date.now() &&
-          (event.parentId === null || UUID.test(event.parentId)) &&
-          (!Object.hasOwn(event, "ephemeral") || typeof event.ephemeral === "boolean") &&
-          !Object.hasOwn(event, "agentId") &&
-          object(event.data),
-        "Native session event identity, timestamp, ownership, or envelope is invalid.",
-      );
-      seen.add(event.id);
-      const { type, data } = event;
-      if (type === "user.message") counts.userMessages++;
-      if (/^(assistant|model)\./u.test(type)) counts.modelEvents++;
-      if (/^(tool|permission|hook|elicitation)\./u.test(type)) counts.toolOrPermissionEvents++;
-      requireState(
-        counts.userMessages === 0 &&
-          counts.modelEvents === 0 &&
-          counts.toolOrPermissionEvents === 0,
-        "State-only observation forbids every user message, model response, refusal, tool, permission, or hook event.",
-      );
-      switch (type) {
-        case "session.start":
-          requireState(
-            ++counts.sessionStarts === 1 &&
-              data.sessionId === sessionId &&
-              event.parentId === null &&
-              data.copilotVersion === SUPPORTED_COPILOT_VERSION &&
-              typeof data.producer === "string" &&
-              Number.isInteger(data.version) &&
-              TIMESTAMP.test(data.startTime) &&
-              Date.parse(data.startTime) >= earliest &&
-              Date.parse(data.startTime) <= Date.now() &&
-              (!Object.hasOwn(data, "alreadyInUse") || data.alreadyInUse === false) &&
-              (!Object.hasOwn(data, "remoteSteerable") || data.remoteSteerable === false) &&
-              !Object.hasOwn(data, "detachedFromSpawningParentSessionId"),
-            "Native session start differs or is not a fresh local session.",
-          );
-          counts.sessionStartedAt = data.startTime;
-          counts.sessionStartEventAt = event.timestamp;
-          break;
-        case "subagent.selected":
-          requireState(
-            exactKeys(data, ["agentName", "agentDisplayName", "tools"]) &&
-              data.agentName === expectedName &&
-              data.agentDisplayName === expectedName &&
-              empty(data.tools),
-            "Native selection event differs from the pinned public profile.",
-          );
-          counts.selectedEvents++;
-          break;
-        case "session.extensions_loaded":
-          requireState(event.ephemeral === true, "Native extension event must be ephemeral.");
-          disabledExtensions(data);
-          break;
-        case "session.mcp_servers_loaded":
-          requireState(
-            event.ephemeral === true && exactKeys(data, ["servers"]),
-            "Native MCP initialization event is malformed.",
-          );
-          disabledServers(data.servers, true);
-          break;
-        case "session.skills_loaded":
-          requireState(
-            event.ephemeral === true && exactKeys(data, ["skills"]) && empty(data.skills),
-            "Native runtime loaded skills in state-only mode.",
-          );
-          break;
-        case "session.tools_updated":
-          requireState(
-            exactKeys(data, ["model"]) && typeof data.model === "string",
-            "Native tool-update schema is unsupported.",
-          );
-          break;
-        case "session.info":
-          requireState(
-            exactKeys(data, ["infoType", "message"], ["tip", "url"]) &&
-              typeof data.infoType === "string" &&
-              typeof data.message === "string",
-            "Native informational event is malformed.",
-          );
-          break;
-        case "session.usage_checkpoint":
-          // Internal cache baselines are not a public model-inventory contract.
-          requireState(
-            exactKeys(
-              data,
-              ["totalNanoAiu"],
-              ["modelCacheState", "promptCacheBreakState", "totalPremiumRequests"],
+          ),
+        ) &&
+        check("event_id_valid", UUID.test(event.id)) &&
+        check("event_id_unseen", !seen.has(event.id)) &&
+        check("event_timestamp_format", TIMESTAMP.test(event.timestamp)) &&
+        check("event_not_before_observation", Date.parse(event.timestamp) >= earliest) &&
+        check("event_not_future", Date.parse(event.timestamp) <= Date.now()) &&
+        check("parent_id_valid", event.parentId === null || UUID.test(event.parentId)) &&
+        check(
+          "ephemeral_boolean",
+          !Object.hasOwn(event, "ephemeral") || typeof event.ephemeral === "boolean",
+        ) &&
+        check("no_agent_id", !Object.hasOwn(event, "agentId")) &&
+        check("data_object", object(event.data)),
+      "Native session event identity, timestamp, ownership, or envelope is invalid.",
+    );
+    seen.add(event.id);
+    const { type, data } = event;
+    if (type === "user.message") counts.userMessages++;
+    if (/^(assistant|model)\./u.test(type)) counts.modelEvents++;
+    if (/^(tool|permission|hook|elicitation)\./u.test(type)) counts.toolOrPermissionEvents++;
+    requireState(
+      check("no_user_events", counts.userMessages === 0) &&
+        check("no_model_events", counts.modelEvents === 0) &&
+        check("no_tool_permission_events", counts.toolOrPermissionEvents === 0),
+      "State-only observation forbids every user message, model response, refusal, tool, permission, or hook event.",
+    );
+    switch (type) {
+      case "session.start":
+        requireState(
+          check("single_start", ++counts.sessionStarts === 1) &&
+            check("data_session_id", data.sessionId === sessionId) &&
+            check("root_parent_null", event.parentId === null) &&
+            check("pinned_start_version", data.copilotVersion === SUPPORTED_COPILOT_VERSION) &&
+            check("producer_string", typeof data.producer === "string") &&
+            check("schema_version_integer", Number.isInteger(data.version)) &&
+            check("start_timestamp_format", TIMESTAMP.test(data.startTime)) &&
+            check("start_not_before_observation", Date.parse(data.startTime) >= earliest) &&
+            check("start_not_future", Date.parse(data.startTime) <= Date.now()) &&
+            check(
+              "not_already_in_use",
+              !Object.hasOwn(data, "alreadyInUse") || data.alreadyInUse === false,
             ) &&
-              data.totalNanoAiu === 0 &&
-              (!Object.hasOwn(data, "totalPremiumRequests") || data.totalPremiumRequests === 0) &&
-              (!Object.hasOwn(data, "modelCacheState") || empty(data.modelCacheState)) &&
-              (!Object.hasOwn(data, "promptCacheBreakState") || empty(data.promptCacheBreakState)),
-            "State-only usage must be zero with no populated or unsupported internal cache baseline.",
+            check(
+              "not_remote_steerable",
+              !Object.hasOwn(data, "remoteSteerable") || data.remoteSteerable === false,
+            ) &&
+            check(
+              "no_detached_parent",
+              !Object.hasOwn(data, "detachedFromSpawningParentSessionId"),
+            ),
+          "Native session start differs or is not a fresh local session.",
+        );
+        counts.sessionStartedAt = data.startTime;
+        counts.sessionStartEventAt = event.timestamp;
+        counts.fullyValidatedSessionStarts++;
+        break;
+      case "subagent.selected":
+        requireState(
+          exactKeys(data, ["agentName", "agentDisplayName", "tools"]) &&
+            data.agentName === expectedName &&
+            data.agentDisplayName === expectedName &&
+            empty(data.tools),
+          "Native selection event differs from the pinned public profile.",
+        );
+        counts.selectedEvents++;
+        break;
+      case "session.extensions_loaded":
+        requireState(event.ephemeral === true, "Native extension event must be ephemeral.");
+        disabledExtensions(data);
+        break;
+      case "session.mcp_servers_loaded":
+        requireState(
+          event.ephemeral === true && exactKeys(data, ["servers"]),
+          "Native MCP initialization event is malformed.",
+        );
+        disabledServers(data.servers, true);
+        break;
+      case "session.skills_loaded":
+        requireState(
+          event.ephemeral === true && exactKeys(data, ["skills"]) && empty(data.skills),
+          "Native runtime loaded skills in state-only mode.",
+        );
+        break;
+      case "session.tools_updated":
+        requireState(
+          exactKeys(data, ["model"]) && typeof data.model === "string",
+          "Native tool-update schema is unsupported.",
+        );
+        break;
+      case "session.info":
+        requireState(
+          exactKeys(data, ["infoType", "message"], ["tip", "url"]) &&
+            typeof data.infoType === "string" &&
+            typeof data.message === "string",
+          "Native informational event is malformed.",
+        );
+        break;
+      case "session.usage_checkpoint":
+        // Internal cache baselines are not a public model-inventory contract.
+        requireState(
+          exactKeys(
+            data,
+            ["totalNanoAiu"],
+            ["modelCacheState", "promptCacheBreakState", "totalPremiumRequests"],
+          ) &&
+            data.totalNanoAiu === 0 &&
+            (!Object.hasOwn(data, "totalPremiumRequests") || data.totalPremiumRequests === 0) &&
+            (!Object.hasOwn(data, "modelCacheState") || empty(data.modelCacheState)) &&
+            (!Object.hasOwn(data, "promptCacheBreakState") || empty(data.promptCacheBreakState)),
+          "State-only usage must be zero with no populated or unsupported internal cache baseline.",
+        );
+        break;
+      default:
+        requireState(false, "Native event type is unsupported in state-only observation.");
+    }
+  }
+  return {
+    counts,
+    receive(method, params, fingerprint) {
+      const isStart =
+        method === "session.event" && object(params.event) && params.event.type === "session.start";
+      const diagnostic = isStart ? createSessionStartDiagnostic(params, fingerprint) : undefined;
+      if (isStart) counts.observedSessionStarts++;
+      const validatedBefore = counts.fullyValidatedSessionStarts;
+      try {
+        validateNotification(method, params, (key, value) =>
+          diagnostic ? diagnostic.check(key, value) : value,
+        );
+      } finally {
+        if (diagnostic) {
+          retainSessionDiagnostic(
+            receipt,
+            "sessionStartDiagnostics",
+            diagnostic.snapshot(counts.fullyValidatedSessionStarts > validatedBefore),
           );
-          break;
-        default:
-          requireState(false, "Native event type is unsupported in state-only observation.");
+        }
       }
     },
   };
@@ -801,7 +1047,7 @@ async function observeCopilotProtocol3(
       );
       requireState(nativeTimeout >= 1, "Credential-bound state setup exhausted its deadline.");
     }
-    const observer = observeNotifications(options.sessionId, name);
+    const observer = observeNotifications(options.sessionId, name, receipt);
     receipt.events = observer.counts;
     transport = openProtocolTransport(
       {
@@ -812,6 +1058,13 @@ async function observeCopilotProtocol3(
         onNotification: observer.receive,
         onConnectResponse: (message, fingerprint, expectedId) => {
           receipt.connect = projectConnectResponse(message, fingerprint, expectedId);
+        },
+        onSessionCreateResponse: (message, fingerprint, expectedId) => {
+          retainSessionDiagnostic(
+            receipt,
+            "sessionCreateDiagnostics",
+            projectSessionCreateResponse(message, fingerprint, expectedId, options.sessionId),
+          );
         },
         onAuthResponse:
           authOnly || credentialBound
@@ -883,11 +1136,29 @@ async function observeCopilotProtocol3(
           "session.create",
           sessionConfiguration(options.sessionId, profile, body, physicalWorkspace, home),
         );
-        requireState(
-          exactKeys(created, ["sessionId"], ["workspacePath", "capabilities"]) &&
-            created.sessionId === options.sessionId,
-          "Native session creation returned another identity.",
-        );
+        try {
+          requireState(
+            exactKeys(created, ["sessionId"], ["workspacePath", "capabilities"]) &&
+              created.sessionId === options.sessionId,
+            "Native session creation returned another identity.",
+          );
+        } catch (error) {
+          const projection = receipt.sessionCreateDiagnostics[0];
+          const predicates = {
+            result_shape: projection.predicates.result_shape,
+            exact_requested_session_id: projection.predicates.exact_requested_session_id,
+          };
+          receipt.hostRejection = boundedSessionDiagnostic({
+            origin: "session-create-result",
+            errorCode: "AP_REVIEW_PROTOCOL_STATE_REJECTED",
+            rawResponseBytes: projection.rawResponseBytes,
+            rawResponseSha256: projection.rawResponseSha256,
+            predicateEvidence: "result-projection",
+            predicates,
+            failedPredicates: Object.keys(predicates).filter((key) => !predicates[key]),
+          });
+          throw error;
+        }
         receipt.nativeSessionId = created.sessionId;
         const initialized = await transport.request("session.tools.initializeAndValidate", {
           sessionId: options.sessionId,
@@ -981,6 +1252,7 @@ async function observeCopilotProtocol3(
       receipt.errorCode = failure.code;
       receipt.blockedReason = failure.message;
     }
+    failureProvenance(receipt);
     await writeFile(
       join(
         captureDirectory,

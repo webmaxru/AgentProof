@@ -130,6 +130,7 @@ export function openProtocolTransport(
     onNotification,
     onConnectResponse,
     onAuthResponse,
+    onSessionCreateResponse,
     connectOnly = false,
     authOnly = false,
     timeoutMs = PROTOCOL_DEADLINE_MS,
@@ -179,7 +180,13 @@ export function openProtocolTransport(
   const closed = new Promise((resolve) => (resolveClosed = resolve));
   const deadline = new Promise((resolve) => (resolveDeadline = resolve));
 
-  function fail(error) {
+  function fail(error, origin = "transport", fingerprint) {
+    if (!failure) {
+      stats.firstFailure = {
+        origin,
+        ...(fingerprint ? { ...fingerprint } : {}),
+      };
+    }
     failure ??=
       error instanceof AgentProofError
         ? error
@@ -221,6 +228,17 @@ export function openProtocolTransport(
     ) {
       onAuthResponse?.(message, fingerprint, outstandingId);
     }
+    if (
+      outstanding?.method === "session.create" &&
+      (!object(message) || !Object.hasOwn(message, "method"))
+    ) {
+      try {
+        onSessionCreateResponse?.(message, fingerprint, outstandingId);
+      } catch (error) {
+        fail(error, "session-create-diagnostics", fingerprint);
+        throw error;
+      }
+    }
     if (!object(message) || message.jsonrpc !== "2.0") {
       throw rejected("ENVELOPE_INVALID", "Native JSON-RPC envelope is unsupported.");
     }
@@ -245,7 +263,20 @@ export function openProtocolTransport(
           "Native notification is unknown or exceeds its bound.",
         );
       }
-      onNotification(message.method, message.params);
+      try {
+        onNotification(message.method, message.params, fingerprint);
+      } catch (error) {
+        fail(
+          error,
+          message.method === "session.event" &&
+            object(message.params.event) &&
+            message.params.event.type === "session.start"
+            ? "session-start-notification"
+            : "session-notification",
+          fingerprint,
+        );
+        throw error;
+      }
       return;
     }
     if (
@@ -406,7 +437,7 @@ export function openProtocolTransport(
       });
     },
     abort() {
-      fail(rejected("ABORTED", "Trusted host blocked the native state observation."));
+      fail(rejected("ABORTED", "Trusted host blocked the native state observation."), "host-abort");
     },
     async finish() {
       if (authOnly && !failure && stats.requestCount !== AUTH_DIAGNOSTIC_PREFIX.length) {

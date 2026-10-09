@@ -11,6 +11,14 @@ starts three isolated, read-only Copilot App sessions to explain the evidence,
 then runs the Evidence Assembler manually. A release manager decides whether to
 remediate or accept an eligible, bounded exception.
 
+The Experience is built around the Evidence Board canvas: it is the release
+control room, not a side panel. It turns the same SHA-bound evidence into a
+clear, decision-ready narrative that an engineering lead and a business owner
+can both understand in under a minute.
+
+See the hackathon package in [docs/hackathon-submission.md](docs/hackathon-submission.md)
+and the UI/UX review pack in [docs/ui-ux-audits.md](docs/ui-ux-audits.md).
+
 The private automation lab also proved a fail-closed permission canary on
 2026-09-03. Repository reviewer profiles appeared after project selection, and
 PR opened/synchronized events ran. However, even after the automation picker was

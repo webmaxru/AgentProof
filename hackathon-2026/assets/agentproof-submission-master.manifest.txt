@@ -1,0 +1,12 @@
+STAGED DEMO | SYNTHETIC DATA
+Type: narrated staged demonstration using synthetic data
+Duration: 164.000 seconds
+Maximum: 180 seconds
+Dimensions: 1920x1080
+Frame rate: 30 fps
+Audio: Windows local speech synthesis
+Live Canvas walkthrough: 6dd8a8a0c5d836ef2fa95197ae7231fc2c43ca55013a09da5fe9500140aaecb2
+Scenes: 8
+Narration words: 339
+Timeline SHA-256: 6f2354cfefe9cbe19a8f7f9614fce384c0d777ed355499f2a67d9692ab65a21e
+Video SHA-256: 7bef6bd573c3f9c19e01ca2e79f814995f6b4e9e69e9cd9dd04cbc6099f857f2

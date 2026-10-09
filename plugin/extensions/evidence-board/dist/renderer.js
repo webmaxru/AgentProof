@@ -4,199 +4,317 @@ const HTML = String.raw`<!doctype html>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AgentProof Evidence Board</title>
+  <!--
+    THESIS: A release blotter for one exact SHA, refusing the promotional hero/dashboard-stat pattern.
+    OWN-WORLD: Matte operational surfaces, hairline rules, ledger rows, action-blue controls, and status inks.
+    STORY: Read gate and scope, triage the blocker queue, inspect evidence, then draft a human disposition.
+    FIRST VIEWPORT: Compact command bar and release strip above a three-pane queue, inspector, and context rail.
+    FORM: Financial trade blotter, ranked direction 5; ticket-and-blotter staging; seed 3c820c17.
+  -->
   <style>
-    :root { color-scheme: light dark; }
+    :root {
+      color-scheme: light dark;
+      --board-bg: #f3f5f7;
+      --surface: #ffffff;
+      --surface-subtle: #f7f8fa;
+      --surface-selected: #eef5ff;
+      --text: #1f2328;
+      --muted: #59636e;
+      --faint: #77818c;
+      --border: #c9d1d9;
+      --border-strong: #8c959f;
+      --accent: #0969da;
+      --accent-strong: #0550ae;
+      --pass: #116329;
+      --pass-bg: #dafbe1;
+      --fail: #b4232d;
+      --fail-bg: #ffebe9;
+      --unknown: #7d4e00;
+      --unknown-bg: #fff8c5;
+      --exception: #6639ba;
+      --exception-bg: #f4edff;
+      --shadow: 0 8px 24px rgba(31, 35, 40, 0.08);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --board-bg: #0d1117;
+        --surface: #161b22;
+        --surface-subtle: #1c2128;
+        --surface-selected: #14243a;
+        --text: #f0f3f6;
+        --muted: #b1bac4;
+        --faint: #8c959f;
+        --border: #30363d;
+        --border-strong: #6e7681;
+        --accent: #58a6ff;
+        --accent-strong: #79c0ff;
+        --pass: #56d364;
+        --pass-bg: #173923;
+        --fail: #ff7b72;
+        --fail-bg: #3d1f24;
+        --unknown: #e3b341;
+        --unknown-bg: #3b2e13;
+        --exception: #d2a8ff;
+        --exception-bg: #30244f;
+        --shadow: 0 12px 32px rgba(0, 0, 0, 0.34);
+      }
+    }
     * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
     body {
       margin: 0;
-      background:
-        radial-gradient(circle at top left, rgba(9, 105, 218, 0.12), transparent 28%),
-        linear-gradient(180deg, #f6f8fa 0%, #ffffff 26%, #f6f8fa 100%);
-      color: var(--text-color-default, #1f2328);
+      min-width: 320px;
+      background: var(--board-bg);
+      color: var(--text);
       font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
       font-size: var(--text-body-medium, 14px);
       line-height: var(--leading-body-medium, 20px);
     }
     button, input, select, textarea { font: inherit; }
     button, select, input, textarea {
-      border: 1px solid var(--border-color-default, #d0d7de);
-      border-radius: 6px;
-      background: var(--background-color-default, #ffffff);
-      color: var(--text-color-default, #1f2328);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      background: var(--surface);
+      color: var(--text);
     }
-    button { cursor: pointer; padding: 6px 10px; }
-    button:hover { background: color-mix(in srgb, var(--text-color-default, #1f2328) 7%, transparent); }
+    button {
+      min-height: 32px;
+      cursor: pointer;
+      padding: 5px 10px;
+      transition: background-color 120ms ease-out, border-color 120ms ease-out, box-shadow 120ms ease-out;
+    }
+    button:hover { background: var(--surface-subtle); border-color: var(--border-strong); }
     button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
-      outline: 2px solid var(--color-focus-outline, #0969da);
+      outline: 2px solid var(--accent);
       outline-offset: 2px;
     }
     button:disabled { cursor: not-allowed; opacity: .55; }
-    a { color: var(--true-color-blue, #0969da); }
+    a { color: var(--accent); }
     code, pre {
       font-family: var(--font-mono, "SFMono-Regular", Consolas, monospace);
       font-size: var(--text-code-inline, 12px);
     }
     h1, h2, h3, p { margin-top: 0; }
-    h1 {
-      margin-bottom: 4px;
-      font-size: var(--text-title-large, 26px);
-      line-height: var(--leading-title-large, 32px);
-      font-weight: var(--font-weight-semibold, 600);
-    }
-    h2 { margin-bottom: 12px; font-size: 18px; }
-    h3 { margin-bottom: 6px; font-size: 15px; }
+    h1 { margin-bottom: 2px; font-size: 18px; line-height: 24px; font-weight: 650; letter-spacing: -0.01em; }
+    h2 { margin-bottom: 10px; font-size: 15px; line-height: 20px; }
+    h3 { margin-bottom: 6px; font-size: 13px; line-height: 18px; }
+    .muted { color: var(--muted); }
     .authority {
-      position: sticky;
-      top: 0;
-      z-index: 10;
-      padding: 10px 16px;
-      border-bottom: 1px solid var(--border-color-default, #d0d7de);
-      background: linear-gradient(90deg, rgba(9, 105, 218, 0.15), rgba(31, 35, 40, 0.02));
-      font-weight: var(--font-weight-semibold, 600);
-    }
-    .shell { max-width: 1240px; margin: 0 auto; padding: 20px; }
-    .heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-    .hero {
-      margin-top: 18px;
-      display: grid;
-      grid-template-columns: minmax(0, 1.5fr) minmax(260px, 0.95fr);
-      gap: 16px;
-      padding: 18px;
-      border: 1px solid rgba(9, 105, 218, 0.2);
-      border-radius: 14px;
-      background: linear-gradient(135deg, rgba(9, 105, 218, 0.08), rgba(31, 35, 40, 0.02));
-      box-shadow: 0 10px 24px rgba(31, 35, 40, 0.05);
-    }
-    .eyebrow {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 4px 10px;
-      border: 1px solid rgba(9, 105, 218, 0.2);
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.7);
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--true-color-blue, #0969da);
-    }
-    .hero-copy h1 {
-      margin: 12px 0 10px;
-      font-size: clamp(24px, 3vw, 36px);
-      line-height: 1.12;
-    }
-    .hero-copy p {
-      max-width: 60ch;
-      margin: 0;
-      color: var(--text-color-muted, #656d76);
-      font-size: 15px;
-    }
-    .hero-panel {
-      display: grid;
-      gap: 10px;
-      align-content: start;
-    }
-    .hero-metric {
       display: flex;
-      justify-content: space-between;
+      min-height: 32px;
       align-items: center;
-      padding: 10px 12px;
-      border-radius: 10px;
-      border: 1px solid var(--border-color-default, #d0d7de);
-      background: rgba(255, 255, 255, 0.82);
+      padding: 5px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-subtle);
+      color: var(--muted);
+      font-size: 12px;
     }
-    .hero-metric strong { font-size: 18px; }
-    .hero-metric .muted { font-size: 12px; }
-    .muted { color: var(--text-color-muted, #656d76); }
+    .shell { width: 100%; max-width: 1680px; margin: 0 auto; padding: 14px; }
+    .command-bar {
+      display: flex;
+      min-height: 50px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 7px 7px 0 0;
+      background: var(--surface);
+    }
+    .command-title { min-width: 0; }
+    .command-title p { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+    .command-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 7px; }
     .badge, .state, .severity {
       display: inline-flex;
+      min-height: 22px;
       align-items: center;
-      border: 1px solid var(--border-color-default, #d0d7de);
+      border: 1px solid var(--border);
       border-radius: 999px;
-      padding: 2px 8px;
-      font-size: 12px;
-      font-weight: var(--font-weight-semibold, 600);
+      padding: 1px 7px;
+      font-size: 11px;
+      line-height: 18px;
+      font-weight: 650;
       white-space: nowrap;
+      text-transform: uppercase;
+      letter-spacing: .025em;
     }
-    .sample { background: color-mix(in srgb, #bf8700 18%, transparent); }
-    .pass { color: #1a7f37; border-color: color-mix(in srgb, #1a7f37 45%, transparent); }
-    .fail { color: var(--true-color-red, #cf222e); border-color: color-mix(in srgb, var(--true-color-red, #cf222e) 45%, transparent); }
-    .success { color: #1a7f37; border-color: color-mix(in srgb, #1a7f37 45%, transparent); }
-    .failure { color: var(--true-color-red, #cf222e); border-color: color-mix(in srgb, var(--true-color-red, #cf222e) 45%, transparent); }
-    .unknown { color: #9a6700; border-color: color-mix(in srgb, #9a6700 45%, transparent); }
-    .exception { color: #8250df; border-color: color-mix(in srgb, #8250df 45%, transparent); }
-    .stale, .expired, .superseded, .edited-away { color: var(--text-color-muted, #656d76); }
-    .panel {
-      margin-top: 16px;
-      padding: 16px;
-      border: 1px solid var(--border-color-default, #d0d7de);
-      border-radius: 8px;
-    }
-    .metadata {
+    .sample { color: var(--unknown); background: var(--unknown-bg); border-color: color-mix(in srgb, var(--unknown) 45%, var(--border)); }
+    .pass, .success { color: var(--pass); background: var(--pass-bg); border-color: color-mix(in srgb, var(--pass) 45%, var(--border)); }
+    .fail, .failure { color: var(--fail); background: var(--fail-bg); border-color: color-mix(in srgb, var(--fail) 45%, var(--border)); }
+    .unknown { color: var(--unknown); background: var(--unknown-bg); border-color: color-mix(in srgb, var(--unknown) 45%, var(--border)); }
+    .exception { color: var(--exception); background: var(--exception-bg); border-color: color-mix(in srgb, var(--exception) 45%, var(--border)); }
+    .stale, .expired, .superseded, .edited-away { color: var(--muted); background: var(--surface-subtle); }
+    .release-strip {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 12px;
+      grid-template-columns: minmax(190px, 1.1fr) repeat(4, minmax(112px, .72fr));
+      border: 1px solid var(--border);
+      border-top: 0;
+      background: var(--surface);
     }
-    .datum { min-width: 0; }
-    .datum span { display: block; color: var(--text-color-muted, #656d76); font-size: 12px; }
-    .datum code { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .counts { display: grid; grid-template-columns: repeat(4, minmax(100px, 1fr)); gap: 10px; margin-top: 16px; }
-    .count { padding: 12px; text-align: left; }
-    .count strong { display: block; font-size: 24px; line-height: 28px; }
-    .count.active { box-shadow: inset 0 0 0 2px var(--color-focus-outline, #0969da); }
-    .workspace { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(340px, 1.2fr); gap: 16px; }
-    .toolbar { display: flex; gap: 8px; margin-bottom: 12px; }
-    .toolbar input { flex: 1; min-width: 0; padding: 6px 9px; }
-    .toolbar select { padding: 6px 9px; }
-    .finding-list { display: grid; gap: 8px; max-height: 620px; overflow: auto; }
-    .finding {
-      width: 100%;
-      padding: 12px;
+    .release-cell {
+      min-width: 0;
+      padding: 9px 12px;
+      border-right: 1px solid var(--border);
+    }
+    .release-cell:last-child { border-right: 0; }
+    .release-cell span { display: block; margin-bottom: 2px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+    .release-cell strong, .release-cell code { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .release-gate { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .release-gate strong { font-size: 19px; line-height: 24px; }
+    .work-grid {
+      display: grid;
+      grid-template-columns: minmax(280px, 360px) minmax(420px, 1fr) minmax(250px, 310px);
+      height: clamp(520px, calc(100vh - 188px), 760px);
+      min-height: 0;
+      border: 1px solid var(--border);
+      border-top: 0;
+      border-radius: 0 0 7px 7px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+    .pane { min-width: 0; height: 100%; overflow: hidden; background: var(--surface); }
+    .queue-pane, .inspector-pane { border-right: 1px solid var(--border); }
+    .pane-header {
+      display: flex;
+      min-height: 43px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 11px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-subtle);
+    }
+    .pane-header h2, .pane-header p { margin: 0; }
+    .pane-header p { font-size: 12px; }
+    .queue-controls { display: grid; gap: 8px; padding: 10px; border-bottom: 1px solid var(--border); }
+    .toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px; }
+    .toolbar input, .toolbar select { width: 100%; min-width: 0; padding: 6px 8px; }
+    .counts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+    .count {
+      display: flex;
+      min-width: 0;
+      min-height: 34px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 4px;
+      padding: 4px 6px;
       text-align: left;
-      display: grid;
-      gap: 6px;
+      background: var(--surface);
     }
-    .finding.selected { box-shadow: inset 0 0 0 2px var(--color-focus-outline, #0969da); }
+    .count strong { font-size: 14px; line-height: 18px; }
+    .count span { overflow: hidden; text-overflow: ellipsis; font-size: 10px; text-transform: uppercase; letter-spacing: .03em; }
+    .count.active { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+    .finding-list { height: calc(100% - 129px); overflow: auto; }
+    .finding {
+      position: relative;
+      width: 100%;
+      min-height: 74px;
+      padding: 10px 11px;
+      border: 0;
+      border-bottom: 1px solid var(--border);
+      border-radius: 0;
+      text-align: left;
+      background: var(--surface);
+    }
+    .finding:hover { background: var(--surface-subtle); }
+    .finding.selected { z-index: 1; background: var(--surface-selected); box-shadow: inset 3px 0 0 var(--accent); }
     .finding-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
-    .finding-id { color: var(--text-color-muted, #656d76); font-family: var(--font-mono, monospace); font-size: 12px; }
-    .detail-grid { display: grid; gap: 14px; }
-    .reference-list, .history, .notes { display: grid; gap: 8px; padding: 0; list-style: none; }
+    .finding-title { display: block; margin-top: 2px; line-height: 18px; }
+    .finding-id { color: var(--muted); font-family: var(--font-mono, monospace); font-size: 11px; }
+    .finding-meta { display: flex; align-items: center; gap: 5px; margin-top: 7px; color: var(--muted); font-size: 11px; }
+    .finding-meta span + span::before { content: "·"; margin-right: 5px; color: var(--faint); }
+    .inspector-scroll { height: calc(100% - 43px); overflow: auto; padding: 14px 16px 20px; }
+    .detail-grid { display: grid; gap: 16px; }
+    .detail-lead { padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+    .detail-lead h2 { margin: 3px 0 7px; font-size: 19px; line-height: 25px; }
+    .detail-summary { max-width: 72ch; margin-bottom: 8px; }
+    .section-block { padding-top: 2px; }
+    .section-label { margin-bottom: 8px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .055em; }
+    .reference-list, .history, .notes { display: grid; gap: 7px; padding: 0; list-style: none; }
     .reference, .history-item, .note {
-      padding: 10px;
-      border: 1px solid var(--border-color-default, #d0d7de);
-      border-radius: 6px;
-      background: color-mix(in srgb, var(--text-color-default, #1f2328) 4%, transparent);
+      padding: 9px 10px;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      background: var(--surface-subtle);
     }
-    .form-grid { display: grid; gap: 10px; }
-    label { display: grid; gap: 4px; font-weight: var(--font-weight-semibold, 600); }
-    textarea { min-height: 86px; resize: vertical; padding: 8px; }
+    .form-grid {
+      display: grid;
+      gap: 9px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface-subtle);
+    }
+    .form-grid h3, .form-grid p { margin-bottom: 0; }
+    label { display: grid; gap: 4px; font-size: 12px; font-weight: 650; }
+    textarea { min-height: 82px; resize: vertical; padding: 8px; }
     select, input { padding: 7px 8px; }
-    .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-    .primary { color: var(--color-white, #fff); background: var(--true-color-blue, #0969da); border-color: transparent; }
-    .primary:hover { background: color-mix(in srgb, var(--true-color-blue, #0969da) 85%, #000); }
+    .actions { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+    .primary { color: #ffffff; background: var(--accent-strong); border-color: var(--accent-strong); }
+    .primary:hover { color: #ffffff; background: color-mix(in srgb, var(--accent-strong) 86%, #000); }
     pre {
       margin: 0;
-      padding: 12px;
+      padding: 11px;
       overflow: auto;
       white-space: pre-wrap;
-      border: 1px solid var(--border-color-default, #d0d7de);
-      border-radius: 6px;
-      background: color-mix(in srgb, var(--text-color-default, #1f2328) 5%, transparent);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      background: var(--board-bg);
     }
-    .danger { color: var(--true-color-red, #cf222e); }
-    .empty { padding: 32px 16px; text-align: center; color: var(--text-color-muted, #656d76); }
-    .error { color: var(--true-color-red, #cf222e); min-height: 20px; }
-    .footer-actions { margin-top: 18px; display: flex; justify-content: flex-end; }
+    .context-pane { overflow: auto; background: var(--surface-subtle); }
+    .context-section { padding: 12px; border-bottom: 1px solid var(--border); }
+    .context-section:last-child { border-bottom: 0; }
+    .context-section h2 { margin-bottom: 9px; font-size: 13px; }
+    .metadata { display: grid; gap: 9px; }
+    .datum { min-width: 0; }
+    .datum span { display: block; margin-bottom: 1px; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .045em; }
+    .datum strong, .datum code { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+    .context-pane .history, .context-pane .notes { gap: 6px; }
+    .context-pane .history-item, .context-pane .note { padding: 8px; background: var(--surface); font-size: 12px; }
+    .board-controls { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .danger { color: var(--fail); }
+    .empty { padding: 36px 16px; text-align: center; color: var(--muted); }
+    .error {
+      margin: 10px 0 0;
+      min-height: 20px;
+      color: var(--fail);
+      font-size: 12px;
+    }
+    .error:empty { display: none; }
+    @media (max-width: 1120px) {
+      .work-grid { grid-template-columns: minmax(260px, 320px) minmax(360px, 1fr) minmax(230px, 280px); }
+    }
+    @media (max-width: 900px) {
+      .work-grid { height: auto; grid-template-columns: minmax(260px, 330px) minmax(360px, 1fr); }
+      .pane { height: auto; }
+      .finding-list { height: auto; max-height: 440px; }
+      .inspector-scroll { height: auto; max-height: 700px; }
+      .context-pane { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--border); }
+      .context-section { border-right: 1px solid var(--border); border-bottom: 0; }
+      .context-section:last-child { border-right: 0; }
+    }
     @media (max-width: 760px) {
-      .counts { grid-template-columns: repeat(2, 1fr); }
-      .workspace { grid-template-columns: 1fr; }
-      .shell { padding: 14px; }
+      .shell { padding: 8px; }
+      .command-bar { flex-direction: column; align-items: stretch; }
+      .command-actions { justify-content: flex-start; }
+      .release-strip { grid-template-columns: repeat(2, 1fr); }
+      .release-cell { border-bottom: 1px solid var(--border); }
+      .release-cell:nth-child(2n) { border-right: 0; }
+      .release-cell:last-child { grid-column: 1 / -1; border-right: 0; border-bottom: 0; }
+      .work-grid { display: block; min-height: 0; }
+      .queue-pane, .inspector-pane { border-right: 0; border-bottom: 1px solid var(--border); }
+      .finding-list { max-height: 360px; }
+      .inspector-scroll { max-height: none; }
+      .context-pane { display: block; }
+      .context-section { border-right: 0; border-bottom: 1px solid var(--border); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
     }
   </style>
 </head>
 <body>
-  <div class="authority" id="authority">GitHub checks, comments, and reviews are authoritative. This mutable board only coordinates evidence and drafts commands; it never approves or merges.</div>
+  <div class="authority" id="authority">GitHub checks, comments, and reviews are authoritative. This mutable board coordinates evidence and drafts commands; it never approves or merges.</div>
   <main class="shell">
     <div id="app" aria-live="polite"><div class="empty">Loading evidence board…</div></div>
   </main>
@@ -228,6 +346,9 @@ const HTML = String.raw`<!doctype html>
       if (settings.maxLength) element.maxLength = settings.maxLength;
       if (settings.min) element.min = settings.min;
       if (settings.ariaLabel) element.setAttribute("aria-label", settings.ariaLabel);
+      if (settings.ariaPressed !== undefined) element.setAttribute("aria-pressed", String(settings.ariaPressed));
+      if (settings.ariaCurrent) element.setAttribute("aria-current", settings.ariaCurrent);
+      if (settings.role) element.setAttribute("role", settings.role);
       for (const child of children || []) {
         if (child !== null && child !== undefined) {
           element.append(child);
@@ -269,10 +390,12 @@ const HTML = String.raw`<!doctype html>
     function countButton(state, count) {
       const button = node("button", {
         className: "count " + state + (filter === state ? " active" : ""),
-        type: "button"
+        type: "button",
+        ariaPressed: filter === state,
+        ariaLabel: "Show " + state + " findings"
       }, [
-        node("strong", { text: count }),
-        node("span", { text: state })
+        node("span", { text: state }),
+        node("strong", { text: count })
       ]);
       button.addEventListener("click", function () {
         filter = filter === state ? "all" : state;
@@ -299,19 +422,22 @@ const HTML = String.raw`<!doctype html>
       const selected = board.selectedFindingId === finding.id;
       const button = node("button", {
         className: "finding" + (selected ? " selected" : ""),
-        type: "button"
+        type: "button",
+        ariaPressed: selected,
+        ariaCurrent: selected ? "true" : null
       }, [
         node("div", { className: "finding-top" }, [
           node("div", {}, [
             node("div", { className: "finding-id", text: finding.id }),
-            node("strong", { text: finding.title })
+            node("strong", { className: "finding-title", text: finding.title })
           ]),
           node("span", { className: "state " + finding.state, text: finding.state })
         ]),
-        node("span", {
-          className: "muted",
-          text: finding.category + " · " + finding.severity + " · " + finding.collector
-        })
+        node("div", { className: "finding-meta" }, [
+          node("span", { text: finding.severity }),
+          node("span", { text: finding.category }),
+          node("span", { text: finding.collector })
+        ])
       ]);
       button.addEventListener("click", async function () {
         try {
@@ -419,7 +545,7 @@ const HTML = String.raw`<!doctype html>
         return node("div", { className: "empty", text: "Select a finding to inspect its evidence." });
       }
       return node("div", { className: "detail-grid" }, [
-        node("div", {}, [
+        node("div", { className: "detail-lead" }, [
           node("div", { className: "finding-top" }, [
             node("div", {}, [
               node("div", { className: "finding-id", text: finding.id }),
@@ -427,7 +553,7 @@ const HTML = String.raw`<!doctype html>
             ]),
             node("span", { className: "state " + finding.state, text: finding.state })
           ]),
-          node("p", { text: finding.summary }),
+          node("p", { className: "detail-summary", text: finding.summary }),
           node("p", {
             className: "muted",
             text:
@@ -438,12 +564,12 @@ const HTML = String.raw`<!doctype html>
               finding.sourceSha.slice(0, 12)
           })
         ]),
-        node("div", {}, [
-          node("h3", { text: "Evidence" }),
+        node("div", { className: "section-block" }, [
+          node("h3", { className: "section-label", text: "Evidence references" }),
           node("ul", { className: "reference-list" }, finding.evidenceRefs.map(evidenceReference))
         ]),
-        node("div", {}, [
-          node("h3", { text: "Remediation" }),
+        node("div", { className: "section-block" }, [
+          node("h3", { className: "section-label", text: "Recommended remediation" }),
           node("p", { text: finding.remediationHint })
         ]),
         draftPanel(finding),
@@ -519,7 +645,12 @@ const HTML = String.raw`<!doctype html>
             .includes(normalizedQuery);
         return matchesFilter && matchesQuery;
       });
-      const search = node("input", { type: "search", placeholder: "Filter findings", value: query });
+      const search = node("input", {
+        type: "search",
+        placeholder: "Search ID, title, or summary",
+        value: query,
+        ariaLabel: "Search findings"
+      });
       search.addEventListener("input", function () {
         query = search.value;
         render();
@@ -529,7 +660,7 @@ const HTML = String.raw`<!doctype html>
           nextSearch.setSelectionRange(query.length, query.length);
         }
       });
-      const stateFilter = node("select", { value: filter }, [
+      const stateFilter = node("select", { value: filter, ariaLabel: "Filter findings by state" }, [
         node("option", { value: "all", text: "all states" }),
         node("option", { value: "pass", text: "pass" }),
         node("option", { value: "fail", text: "fail" }),
@@ -542,118 +673,133 @@ const HTML = String.raw`<!doctype html>
         render();
       });
 
-      const headingChildren = [
-        node("div", {}, [
-          node("h1", { text: "Evidence Board" }),
-          node("p", {
-            className: "muted",
-            text: documentValue.repository + " · pull request #" + documentValue.pullRequestNumber
-          })
-        ]),
-        node("div", { className: "actions" }, [
-          board.sample
-            ? node("span", { className: "badge sample", text: "SYNTHETIC CONTRACT FIXTURE" })
-            : null,
-          node("span", {
-            className: "state " + documentValue.gate.conclusion,
-            text: "gate: " + documentValue.gate.conclusion
-          })
-        ])
-      ];
+      const openFindingCount = board.counts.fail + board.counts.unknown + board.counts.exception;
+      const selectedLabel = board.selectedFinding
+        ? board.selectedFinding.category + " · " + board.selectedFinding.severity
+        : "No finding selected";
+      const clearButton = (function () {
+        const clear = node("button", { className: "danger", type: "button", text: "Clear board" });
+        clear.addEventListener("click", async function () {
+          if (!window.confirm("Clear this mutable Evidence Board? GitHub records are unchanged.")) return;
+          try {
+            errorMessage = "";
+            board = await request("/api/clear", {});
+            render();
+          } catch (error) {
+            errorMessage = error.message;
+            render();
+          }
+        });
+        return clear;
+      })();
 
       app.append(
-        node("div", { className: "heading" }, headingChildren),
-        node("section", { className: "hero" }, [
-          node("div", { className: "hero-copy" }, [
-            node("div", { className: "eyebrow", text: "Release control room" }),
-            node("h1", { text: "The exact change is either evidence-backed or it is not." }),
+        node("header", { className: "command-bar" }, [
+          node("div", { className: "command-title" }, [
+            node("h1", { text: "Evidence Board" }),
             node("p", {
-              text: "This board turns a GitHub pull request into a single decision surface: same-SHA facts, clear blockers, and a human-ready command path without accepting the risk of an unreviewed merge."
+              className: "muted",
+              text: documentValue.repository + " · pull request #" + documentValue.pullRequestNumber
             })
           ]),
-          node("div", { className: "hero-panel" }, [
-            node("div", { className: "hero-metric" }, [
-              node("div", {}, [
-                node("div", { className: "muted", text: "Gate" }),
-                node("strong", { text: documentValue.gate.conclusion.toUpperCase() })
-              ]),
-              node("span", { className: "state " + documentValue.gate.conclusion, text: documentValue.gate.conclusion })
-            ]),
-            node("div", { className: "hero-metric" }, [
-              node("div", {}, [
-                node("div", { className: "muted", text: "Head SHA" }),
-                node("strong", { text: documentValue.headSha.slice(0, 12) })
-              ]),
-              node("span", { className: "badge", text: "Bound" })
-            ]),
-            node("div", { className: "hero-metric" }, [
-              node("div", {}, [
-                node("div", { className: "muted", text: "Open findings" }),
-                node("strong", { text: String(board.counts.fail + board.counts.unknown + board.counts.exception) })
-              ]),
-              node("span", { className: "muted", text: "Needs attention" })
-            ])
+          node("div", { className: "command-actions" }, [
+            board.sample ? node("span", { className: "badge sample", text: "Synthetic contract fixture" }) : null,
+            node("span", { className: "badge", text: "SHA bound" }),
+            node("span", {
+              className: "state " + documentValue.gate.conclusion,
+              text: "Gate " + documentValue.gate.conclusion
+            })
           ])
         ]),
-        node("section", { className: "panel metadata", ariaLabel: "Evidence identity" }, [
-          datum("Head SHA", documentValue.headSha, true),
-          datum("Base SHA", documentValue.baseSha, true),
-          datum(
-            "Origin",
-            documentValue.origin.classification +
-              (documentValue.origin.declaredTool ? " · " + documentValue.origin.declaredTool : ""),
-            false
-          ),
-          datum("Policy", documentValue.policy.path + " · " + documentValue.policy.version, false),
-          datum("Policy SHA-256", documentValue.policy.sha256, true),
-          datum("Generated", documentValue.generatedAt, false)
+        node("section", { className: "release-strip", ariaLabel: "Release status and evidence scope" }, [
+          node("div", { className: "release-cell release-gate" }, [
+            node("div", {}, [
+              node("span", { text: "Gate conclusion" }),
+              node("strong", { text: documentValue.gate.conclusion.toUpperCase() })
+            ]),
+            node("span", { className: "state " + documentValue.gate.conclusion, text: documentValue.gate.conclusion })
+          ]),
+          node("div", { className: "release-cell" }, [
+            node("span", { text: "Head SHA" }),
+            node("code", { text: documentValue.headSha, title: documentValue.headSha })
+          ]),
+          node("div", { className: "release-cell" }, [
+            node("span", { text: "Needs attention" }),
+            node("strong", { text: String(openFindingCount) + " findings" })
+          ]),
+          node("div", { className: "release-cell" }, [
+            node("span", { text: "Protected policy" }),
+            node("strong", { text: documentValue.policy.version, title: documentValue.policy.path })
+          ]),
+          node("div", { className: "release-cell" }, [
+            node("span", { text: "Evidence generated" }),
+            node("strong", { text: documentValue.generatedAt })
+          ])
         ]),
-        node("div", { className: "counts" }, [
-          countButton("pass", board.counts.pass),
-          countButton("fail", board.counts.fail),
-          countButton("unknown", board.counts.unknown),
-          countButton("exception", board.counts.exception)
-        ]),
-        node("div", { className: "workspace" }, [
-          node("section", { className: "panel" }, [
-            node("h2", { text: "Findings" }),
-            node("div", { className: "toolbar" }, [search, stateFilter]),
+        node("div", { className: "work-grid" }, [
+          node("section", { className: "pane queue-pane", ariaLabel: "Finding queue" }, [
+            node("div", { className: "pane-header" }, [
+              node("h2", { text: "Finding queue" }),
+              node("p", { className: "muted", text: visibleFindings.length + " visible" })
+            ]),
+            node("div", { className: "queue-controls" }, [
+              node("div", { className: "counts", role: "group", ariaLabel: "Finding state filters" }, [
+                countButton("pass", board.counts.pass),
+                countButton("fail", board.counts.fail),
+                countButton("unknown", board.counts.unknown),
+                countButton("exception", board.counts.exception)
+              ]),
+              node("div", { className: "toolbar" }, [search, stateFilter])
+            ]),
             node(
               "div",
               { className: "finding-list" },
               visibleFindings.length === 0
-                ? [node("div", { className: "empty", text: "No findings match this filter." })]
+                ? [node("div", { className: "empty", text: "No findings match the current search and state filter." })]
                 : visibleFindings.map(findingButton)
             )
           ]),
-          node("section", { className: "panel" }, [selectedDetail()])
+          node("section", { className: "pane inspector-pane", ariaLabel: "Selected finding inspector" }, [
+            node("div", { className: "pane-header" }, [
+              node("h2", { text: "Finding inspector" }),
+              node("p", { className: "muted", text: selectedLabel })
+            ]),
+            node("div", { className: "inspector-scroll" }, [selectedDetail()])
+          ]),
+          node("aside", { className: "pane context-pane", ariaLabel: "Evidence context" }, [
+            node("section", { className: "context-section" }, [
+              node("h2", { text: "Evidence scope" }),
+              node("div", { className: "metadata" }, [
+                datum("Head SHA", documentValue.headSha, true),
+                datum("Base SHA", documentValue.baseSha, true),
+                datum(
+                  "Origin",
+                  documentValue.origin.classification +
+                    (documentValue.origin.declaredTool ? " · " + documentValue.origin.declaredTool : ""),
+                  false
+                ),
+                datum("Policy", documentValue.policy.path + " · " + documentValue.policy.version, false),
+                datum("Policy SHA-256", documentValue.policy.sha256, true)
+              ])
+            ]),
+            node("section", { className: "context-section" }, [
+              node("h2", { text: "Disposition history" }),
+              dispositionHistory(documentValue)
+            ]),
+            node("section", { className: "context-section" }, [
+              node("h2", { text: "Specialist notes" }),
+              reviewerNotes(documentValue)
+            ]),
+            node("section", { className: "context-section board-controls" }, [
+              node("div", {}, [
+                node("h2", { text: "Board controls" }),
+                node("p", { className: "muted", text: "Clearing affects only this mutable view." })
+              ]),
+              clearButton
+            ])
+          ])
         ]),
-        node("section", { className: "panel" }, [
-          node("h2", { text: "Human disposition history" }),
-          dispositionHistory(documentValue)
-        ]),
-        node("section", { className: "panel" }, [
-          node("h2", { text: "Specialist notes" }),
-          reviewerNotes(documentValue)
-        ]),
-        node("div", { className: "error", text: errorMessage }),
-        node("div", { className: "footer-actions" }, [
-          (function () {
-            const clear = node("button", { className: "danger", type: "button", text: "Clear mutable board" });
-            clear.addEventListener("click", async function () {
-              if (!window.confirm("Clear this mutable Evidence Board? GitHub records are unchanged.")) return;
-              try {
-                errorMessage = "";
-                board = await request("/api/clear", {});
-                render();
-              } catch (error) {
-                errorMessage = error.message;
-                render();
-              }
-            });
-            return clear;
-          })()
-        ])
+        node("div", { className: "error", role: "status", text: errorMessage })
       );
     }
 

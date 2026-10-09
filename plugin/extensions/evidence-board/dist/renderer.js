@@ -703,7 +703,7 @@ const HTML = String.raw`<!doctype html>
             })
           ]),
           node("div", { className: "command-actions" }, [
-            board.sample ? node("span", { className: "badge sample", text: "Sample evidence" }) : null,
+            board.sample ? node("span", { className: "badge sample", text: "Synthetic contract fixture" }) : null,
             node("span", { className: "badge", text: "SHA bound" }),
             node("span", {
               className: "state " + documentValue.gate.conclusion,

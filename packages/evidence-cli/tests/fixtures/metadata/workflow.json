@@ -10,5 +10,5 @@
   "authorAssociation": "MEMBER",
   "baseRef": "main",
   "headRef": "feature/evidence",
-  "samplePath": "sample-repo"
+  "appPath": "."
 }

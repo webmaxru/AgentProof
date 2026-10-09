@@ -1,4 +1,6 @@
-import { resolve } from "node:path";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
   AGENTPROOF_VERSION,
@@ -158,21 +160,21 @@ async function inputsFromPullRequest(
   });
 
   const repository = await resolveWorkspaceDirectory(workspacePath, ".");
-  let sample: Awaited<ReturnType<typeof resolveWorkspaceDirectory>> | null;
+  let application: Awaited<ReturnType<typeof resolveWorkspaceDirectory>> | null;
   try {
-    sample = await resolveWorkspaceDirectory(workspacePath, metadata.samplePath);
+    application = await resolveWorkspaceDirectory(workspacePath, metadata.appPath);
   } catch {
-    sample = null;
+    application = null;
   }
   const retentionPath =
-    sample === null
+    application === null
       ? null
-      : sample.logicalPath === ""
+      : application.logicalPath === ""
         ? "config/data-handling.yml"
-        : `${sample.logicalPath}/config/data-handling.yml`;
+        : `${application.logicalPath}/config/data-handling.yml`;
   const retentionDeclaration =
     retentionPath === null
-      ? unavailable("Sample application directory is absent or outside the repository.")
+      ? unavailable("Application directory is absent or outside the repository.")
       : await readWorkspaceSource(workspacePath, retentionPath, DECLARATION_LIMIT);
   let npmTool: Awaited<ReturnType<typeof resolveTrustedNpm>> | null;
   try {
@@ -239,11 +241,11 @@ async function inputsFromPullRequest(
   let vitestReport = unavailable("Vitest collector did not run.");
   let coverageReport = unavailable("Coverage collector did not run.");
   let vitestCommand: NormalizedCollectorInputs["vitestCommand"];
-  if (sample !== null && trustedVitest !== null && collectorDirectoryPath !== undefined) {
+  if (application !== null && trustedVitest !== null && collectorDirectoryPath !== undefined) {
     let collectorWorkspace: Awaited<ReturnType<typeof prepareCollectorWorkspace>> | undefined;
     try {
       collectorWorkspace = await prepareCollectorWorkspace(
-        sample,
+        application,
         collectorDirectoryPath,
         trustedVitest.nodeModulesPath,
       );
@@ -255,13 +257,13 @@ async function inputsFromPullRequest(
           "--config",
           collectorWorkspace.configPath,
           "--root",
-          collectorWorkspace.samplePath,
+          collectorWorkspace.appPath,
           "--coverage",
           "--reporter=json",
           "--outputFile",
           collectorWorkspace.testReportPath,
         ],
-        cwd: collectorWorkspace.samplePath,
+        cwd: collectorWorkspace.appPath,
         timeoutMs: 10 * 60 * 1000,
       });
       vitestCommand = {
@@ -288,8 +290,8 @@ async function inputsFromPullRequest(
     }
   } else {
     const reason =
-      sample === null
-        ? "Sample application directory is absent or outside the repository."
+      application === null
+        ? "Application directory is absent or outside the repository."
         : (trustedVitestError ?? "An isolated collector directory was not supplied.");
     vitestReport = unavailable(reason);
     coverageReport = unavailable(reason);
@@ -528,7 +530,7 @@ async function analyzeWithCleanup(
 
 export async function analyzeCommand(options: AnalyzeCommandOptions): Promise<RawEvidence> {
   const metadata = await readJsonFile(options.metadataPath, 1024 * 1024);
-  const collectorDirectoryPath = `${resolve(options.outputPath)}.collectors`;
+  const collectorDirectoryPath = await mkdtemp(join(tmpdir(), "agentproof-collectors-"));
   const evidence = await analyzeWithCleanup(
     {
       workspacePath: options.workspacePath,

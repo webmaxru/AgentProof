@@ -75,6 +75,14 @@ Evaluation uses `policy/release-policy.yml` from the protected PR base revision.
 The evidence records the policy path, version, base SHA, and digest. A PR cannot
 make itself green by weakening the policy it is being evaluated against.
 
+The PR policy base may be older than the current protected default-branch
+workflow revision. Do not replace `baseSha` with that workflow SHA or require
+them to be equal. Resolve workflow provenance independently from native GitHub
+repository/ref/run records. Current orchestration validates source attempts and
+handoff state; the separately pinned PR-base evaluator and policy produce the
+same base/head-bound evidence contract. A changed PR base or default workflow
+revision during the handoff is blocking, not permission to select another base.
+
 ## Canonicalization and integrity
 
 Each raw, final, and trusted review-fragment document is validated,
@@ -125,9 +133,15 @@ npm run agentproof -- evaluate --evidence <raw-json> --policy <yml> --dispositio
 npm run agentproof -- assemble --fragments <one-final-json> <review-fragment-json...> --output <assembled-json>
 ```
 
-`analyze` accepts either trusted PR metadata (including `samplePath`) and runs
+`analyze` accepts either trusted PR metadata (including the optional `appPath`,
+defaulting to the repository root) and runs
 bounded Vitest coverage plus `npm audit` itself, or explicit report-source
-metadata. `evaluate` always writes valid final evidence when evaluation
+metadata. The legacy `samplePath` alias remains accepted; conflicting aliases
+are rejected. Application selection never changes the repository-root audit
+lockfile. See the [CLI contract](../packages/evidence-cli/README.md) for trusted
+configuration and staging limits.
+
+`evaluate` always writes valid final evidence when evaluation
 completes and exits `0` for a successful gate, `2` for a blocking gate, or `1`
 for an input/engine error. `assemble` requires exactly one final evidence
 document and at least one review fragment; mixed identity or SHA inputs fail.

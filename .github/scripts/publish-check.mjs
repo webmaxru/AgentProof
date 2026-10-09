@@ -14,9 +14,11 @@ import {
   COMMENT_MARKER,
   isAgentProofSummaryComment,
   isGitHubActionsCheckRun,
+  resolveTrustedWorkflowRevision,
   sanitizeMarkdownCell,
   truncateUtf8,
-  validateLivePullRequest,
+  validateCompletedAnalysisRun,
+  validateEvidenceHandoff,
   workflowRunUrlFromEnvironment,
 } from "./workflow-helpers.mjs";
 
@@ -37,18 +39,54 @@ const pullRequestNumber = assertPositiveInteger(evidence.pullRequestNumber, "pul
 const headSha = assertSha(evidence.headSha, "head SHA");
 const baseSha = assertSha(evidence.baseSha, "base SHA");
 const prefix = `/repos/${encodeURIComponent(repository.owner)}/${encodeURIComponent(repository.repo)}`;
+const expectedRunId = assertPositiveInteger(process.env.EXPECTED_RUN_ID, "EXPECTED_RUN_ID");
+const expectedRunAttempt = assertPositiveInteger(
+  process.env.EXPECTED_RUN_ATTEMPT,
+  "EXPECTED_RUN_ATTEMPT",
+);
+if (!process.env.METADATA_PATH || !process.env.RAW_EVIDENCE_PATH) {
+  throw new Error("METADATA_PATH and RAW_EVIDENCE_PATH are required");
+}
+const [metadata, rawEvidence] = await Promise.all([
+  readFile(process.env.METADATA_PATH, "utf8").then(JSON.parse),
+  readFile(process.env.RAW_EVIDENCE_PATH, "utf8").then(JSON.parse),
+]);
+if (assertSha(metadata.baseSha, "metadata base SHA") !== baseSha) {
+  throw new Error("Final evidence policy base does not match analysis metadata");
+}
 
 async function requireCurrentPullRequest() {
-  const [repositoryData, pullRequest] = await Promise.all([
+  const [repositoryData, pullRequest, analysisRun, analysisWorkflow] = await Promise.all([
     githubRequest(prefix),
     githubRequest(`${prefix}/pulls/${pullRequestNumber}`),
+    githubRequest(`${prefix}/actions/runs/${expectedRunId}`),
+    githubRequest(`${prefix}/actions/workflows/agentproof-analyze.yml`),
   ]);
-  validateLivePullRequest({
+  const workflowSha = await resolveTrustedWorkflowRevision({
+    repository: repositoryData,
+    expectedSha: assertSha(process.env.EXPECTED_WORKFLOW_SHA, "EXPECTED_WORKFLOW_SHA"),
+  });
+  validateCompletedAnalysisRun({
+    run: analysisRun,
+    workflow: analysisWorkflow,
+    repository: repositoryData,
+    expectedRunId,
+    expectedRunAttempt,
+    expectedWorkflowSha: workflowSha,
+    publisherEvent: process.env.GITHUB_EVENT_NAME,
+  });
+  validateEvidenceHandoff({
+    metadata,
+    rawEvidence,
+    expected: {
+      pullRequestNumber,
+      headSha,
+      artifactName: process.env.EXPECTED_ARTIFACT_NAME,
+      runId: expectedRunId,
+      serverUrl: process.env.GITHUB_SERVER_URL,
+    },
     repository: repositoryData,
     pullRequest,
-    expectedPullRequestNumber: pullRequestNumber,
-    expectedHeadSha: headSha,
-    expectedBaseSha: baseSha,
   });
 }
 
@@ -138,7 +176,6 @@ if (!isAgentProofSummaryComment(summaryComment)) {
   throw new Error("GitHub did not create or update the expected AgentProof summary");
 }
 
-await requireCurrentPullRequest();
 const checkRuns = await githubRequest(
   `${prefix}/commits/${headSha}/check-runs?check_name=${encodeURIComponent(CHECK_NAME)}&filter=latest&per_page=100`,
 );
@@ -155,6 +192,7 @@ const checkBodies = buildCompletedCheckPayload({
   title: passed ? "AgentProof evidence is complete" : "AgentProof evidence is blocking",
   summary,
 });
+await requireCurrentPullRequest();
 const checkRun = existingCheck
   ? await githubRequest(
       `${prefix}/check-runs/${assertPositiveInteger(existingCheck.id, "check run id")}`,

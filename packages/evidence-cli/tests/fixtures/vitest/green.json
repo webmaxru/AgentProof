@@ -6,24 +6,24 @@
   "success": true,
   "testResults": [
     {
-      "name": "tests/expenses.test.ts",
+      "name": "tests/authorization.test.ts",
       "assertionResults": [
         {
-          "ancestorTitles": ["expense API"],
-          "title": "creates a synthetic expense",
-          "fullName": "expense API creates a synthetic expense",
+          "ancestorTitles": ["application"],
+          "title": "creates a synthetic record",
+          "fullName": "application creates a synthetic record",
           "status": "passed"
         },
         {
-          "ancestorTitles": ["expense API"],
+          "ancestorTitles": ["application"],
           "title": "allows an approver",
-          "fullName": "expense API allows an approver",
+          "fullName": "application allows an approver",
           "status": "passed"
         },
         {
-          "ancestorTitles": ["expense API", "authorization"],
+          "ancestorTitles": ["application", "authorization"],
           "title": "denies a non-approver",
-          "fullName": "expense API authorization denies a non-approver [AP-ID:expense-approval.authorization.non-approver-denied]",
+          "fullName": "application authorization denies a non-approver [AP-ID:authorization.non-approver-denied]",
           "status": "passed"
         }
       ]

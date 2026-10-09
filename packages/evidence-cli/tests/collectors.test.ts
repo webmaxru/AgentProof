@@ -29,7 +29,7 @@ describe("Vitest collector", () => {
     expect(result.findings.map((finding) => finding.state)).toEqual(["pass", "pass"]);
     expect(result.findings[0]?.facts.testCases).toEqual([
       expect.objectContaining({
-        id: "expense-approval.authorization.non-approver-denied",
+        id: "authorization.non-approver-denied",
         status: "passed",
       }),
     ]);

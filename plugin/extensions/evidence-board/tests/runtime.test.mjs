@@ -16,7 +16,7 @@ test("registers the Evidence Board and all five least-privilege actions", () => 
   assert.equal(globalThis.__agentproofTestJoin.canvases[0], canvas);
 });
 
-test("opens sample evidence, serves the banner, routes actions, and closes cleanly", async () => {
+test("opens the synthetic contract fixture, serves the banner, routes actions, and closes cleanly", async () => {
   const context = {
     sessionId: "session-test",
     extensionId: "test:agentproof",
@@ -38,6 +38,7 @@ test("opens sample evidence, serves the banner, routes actions, and closes clean
     input: undefined,
   });
   assert.equal(state.document.headSha, "b".repeat(40));
+  assert.equal(state.document.repository, "OWNER/REPO");
   assert.equal(state.sample, true);
 
   const reset = await byName.get("set_evidence").handler({

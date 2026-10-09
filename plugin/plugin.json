@@ -1,11 +1,11 @@
 {
   "name": "agentproof",
   "description": "Commit-bound release evidence review and a human-decision Evidence Board for GitHub Copilot.",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "author": {
     "name": "AgentProof contributors"
   },
-  "repository": "https://github.com/msft-common-demos/AgentProof",
+  "repository": "https://github.com/webmaxru/AgentProof",
   "license": "MIT",
   "keywords": ["github-copilot", "release-evidence", "human-approval", "policy", "security"],
   "agents": ["./agents/"],

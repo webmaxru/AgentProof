@@ -5,13 +5,10 @@ schema, or compliance baseline. Names and availability vary by GitHub plan and
 the current Copilot App. An enterprise administrator must translate the intent
 into approved live settings.
 
-As validated through 2026-09-03, the AgentProof MVP uses manually started
-installed reviewer sessions. A disposable private-lab automation proved that
-repository reviewers appear after project selection and that PR
-opened/synchronized events dispatch. It also failed the permission gate: after
-the picker was reduced from 50 tools to 21 read-only operations, the runtime
-still exposed `functions.apply_patch`, `functions.bash`, and broader Actions
-access. The candidate was disabled.
+AgentProof uses manually started installed reviewers only when their effective
+runtime is read-only. Historical automation trials exposed mutation, shell,
+and broader repository access despite narrowed selections. Automated specialists
+remain blocked until the current target runtime can exclude those capabilities.
 
 ## Layer 1: centrally managed App guardrails
 
@@ -34,7 +31,7 @@ For each AgentProof Test, Security, or Policy Reviewer session:
 
 - verify the installed plugin source and version;
 - start the exact installed custom reviewer manually, never **Default** or
-  **msx** as a substitute;
+  another general-purpose profile as a substitute;
 - scope the request to one repository, pull request, and current full head SHA;
 - keep the reviewer read-only, with no push, merge, approval, exception,
   secrets, deployment, or cross-repository capability;
@@ -77,7 +74,7 @@ allowed_reads:
   - pull request metadata and diff
   - checks and same-SHA evidence artifacts
 allowed_writes:
-  - <NONE_OR_VERIFIED_SEPARATE_BOUNDED_COMMENT_UPDATE>
+  - none
 denied:
   - implicit host edit, apply-patch, or shell tools
   - push or branch mutation
@@ -88,8 +85,8 @@ denied:
   - cross-repository access
   - unrelated MCP and broad shell/network tools
 prompt_source: templates/automations/<REVIEWER>.md@<COMMIT_SHA>
-effective_permission_preview_verified: true
-custom_agent_picker_verified: true
+effective_permission_preview_verified: <ACTUAL_VERIFICATION_RESULT>
+custom_agent_picker_verified: <ACTUAL_VERIFICATION_RESULT>
 reviewed_at: <YYYY-MM-DD>
 reviewer: <ADMIN_OR_SECURITY_REVIEWER>
 ```

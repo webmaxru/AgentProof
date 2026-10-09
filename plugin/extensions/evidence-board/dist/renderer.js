@@ -551,7 +551,9 @@ const HTML = String.raw`<!doctype html>
           })
         ]),
         node("div", { className: "actions" }, [
-          board.sample ? node("span", { className: "badge sample", text: "SAMPLE EVIDENCE" }) : null,
+          board.sample
+            ? node("span", { className: "badge sample", text: "SYNTHETIC CONTRACT FIXTURE" })
+            : null,
           node("span", {
             className: "state " + documentValue.gate.conclusion,
             text: "gate: " + documentValue.gate.conclusion

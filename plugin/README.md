@@ -29,7 +29,7 @@ copilot --plugin-dir ./plugin
 To install the published private repository marketplace:
 
 ```text
-copilot plugin marketplace add msft-common-demos/AgentProof
+copilot plugin marketplace add webmaxru/AgentProof
 copilot plugin install agentproof@agentproof-marketplace
 ```
 
@@ -45,6 +45,10 @@ The canvas is the clearest artifact for judges and enterprise buyers because it
 translates technical evidence into a release conversation they can read in
 seconds.
 
+The marketplace follows the default branch. Before the migration PR is merged
+by a human, use the reviewed migration checkout with `--plugin-dir` rather than
+claiming the default-branch install already contains these changes.
+
 ## Evidence Board actions
 
 The canvas type is `agentproof-evidence-board`.
@@ -58,6 +62,12 @@ The canvas type is `agentproof-evidence-board`.
 `set_evidence` accepts only `schemaVersion: "1.0.0"` / `documentType: "final"`, verifies the canonical artifact SHA-256, and rejects mismatched base-policy SHAs, finding/reviewer-note SHAs, mixed PR scopes, inconsistent gates, and older evidence updates. Historical dispositions may reference an older SHA so the board can show them as **stale**; they are never treated as effective.
 
 The board cannot post a comment, approve, merge, or change the authoritative gate. GitHub checks, comments, reviews, artifacts, and commit SHAs remain authoritative.
+
+The board opens empty unless an evidence document or an existing repository/PR
+scope is supplied. The optional `useSample: true` input loads
+`artifacts/contract-fixture.json`, a labeled **SYNTHETIC CONTRACT FIXTURE** using
+`OWNER/REPO` placeholders and invented identities. It exercises all four states;
+it is not a scan, live GitHub result, or release decision.
 
 ## Build and test
 

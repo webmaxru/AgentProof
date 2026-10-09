@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
+import { parse as parseYaml } from "yaml";
+import { ANALYSIS_WAIT_MS, dispatchRevalidation } from "./dispatch-revalidation.mjs";
 import {
   assertPositiveInteger,
   assertSha,
@@ -12,15 +17,24 @@ import {
 import {
   ANALYSIS_WORKFLOW_NAME,
   ANALYSIS_WORKFLOW_PATH,
+  APPLICATION_PATH,
+  GITHUB_ACTIONS_BOT_ID,
+  PUBLISH_WORKFLOW_NAME,
+  PUBLISH_WORKFLOW_PATH,
   buildCompletedCheckPayload,
   buildPendingCheckPayload,
   classifyDispositionEvent,
   isAgentProofSummaryComment,
   isTrustedPullRequestAuthor,
   parseRawArtifactName,
+  resolveTrustedWorkflowRevision,
   sanitizeMarkdownCell,
   validateAnalysisRun,
+  validateCompletedAnalysisRun,
+  validateDispatchedAnalysis,
   validateEvidenceHandoff,
+  validateNativePublisherRun,
+  validatePublisherRun,
   validateRulesetPayload,
 } from "./workflow-helpers.mjs";
 
@@ -28,6 +42,79 @@ const HEAD_SHA = "0123456789abcdef0123456789abcdef01234567";
 const BASE_SHA = "89abcdef0123456789abcdef0123456789abcdef";
 const RUN_SHA = "fedcba9876543210fedcba9876543210fedcba98";
 const ARTIFACT_SHA256 = "a".repeat(64);
+
+function defaultRefFixture(sha = BASE_SHA) {
+  return {
+    ref: "refs/heads/main",
+    url: "https://api.github.com/repos/octo-org/agentproof/git/refs/heads/main",
+    object: { type: "commit", sha },
+  };
+}
+
+let scriptInvocation = 0;
+async function runWorkflowScript(script, environment, request) {
+  const previousFetch = globalThis.fetch;
+  const previousEnvironment = new Map(
+    Object.keys(environment).map((key) => [key, process.env[key]]),
+  );
+  try {
+    Object.assign(process.env, environment);
+    globalThis.fetch = async (url, options) => {
+      assert.equal(options.headers["X-GitHub-Api-Version"], "2026-03-10");
+      assert.equal(options.method, "GET");
+      const response = await request(String(url).replace("https://api.github.com", ""));
+      return { ok: true, status: 200, json: async () => response };
+    };
+    await import(`./${script}.mjs?test=${++scriptInvocation}`);
+  } finally {
+    globalThis.fetch = previousFetch;
+    for (const [key, value] of previousEnvironment) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
+
+test("workflow revision is independently resolved from the native default ref, not a PR base", async () => {
+  const { repository } = analysisFixture();
+  const requests = [];
+  const request = async (path) => {
+    requests.push(path);
+    return defaultRefFixture(RUN_SHA);
+  };
+  assert.equal(await resolveTrustedWorkflowRevision({ repository }, request), RUN_SHA);
+  assert.equal(
+    await resolveTrustedWorkflowRevision({ repository, expectedSha: RUN_SHA }, request),
+    RUN_SHA,
+  );
+  await assert.rejects(
+    resolveTrustedWorkflowRevision({ repository, expectedSha: BASE_SHA }, request),
+    /workflow revision changed/,
+  );
+  assert.deepEqual(requests, Array(3).fill("/repos/octo-org/agentproof/git/ref/heads/main"));
+  for (const mutate of [
+    (ref) => {
+      ref.ref = "refs/heads/feature";
+    },
+    (ref) => {
+      ref.url = "https://api.github.com/repos/other/repo/git/refs/heads/main";
+    },
+    (ref) => {
+      ref.object.type = "tag";
+    },
+    (ref) => {
+      ref.object.sha = "abc123";
+    },
+  ]) {
+    const ref = defaultRefFixture();
+    mutate(ref);
+    await assert.rejects(resolveTrustedWorkflowRevision({ repository }, async () => ref));
+  }
+  await assert.rejects(
+    resolveTrustedWorkflowRevision({ repository: { ...repository, default_branch: undefined } }),
+    /default branch is missing/,
+  );
+});
 
 test("assertSha normalizes a full SHA", () => {
   const upper = "ABCDEF0123456789ABCDEF0123456789ABCDEF01";
@@ -150,8 +237,11 @@ function analysisFixture(eventName = "pull_request_target") {
     conclusion: "success",
     event: eventName,
     repository: { id: repository.id, full_name: repository.full_name },
+    head_repository: { id: repository.id, full_name: repository.full_name },
+    actor: { id: 12, login: "octocat", type: "User" },
+    triggering_actor: { id: 12, login: "octocat", type: "User" },
     head_branch: eventName === "workflow_dispatch" ? "main" : "feature",
-    head_sha: RUN_SHA,
+    head_sha: eventName === "workflow_dispatch" ? RUN_SHA : HEAD_SHA,
     pull_requests:
       eventName === "pull_request_target"
         ? [
@@ -193,13 +283,14 @@ function analysisFixture(eventName = "pull_request_target") {
       },
     },
   ];
-  return { event, run, workflow, repository, artifacts };
+  return { event, run, workflow, repository, artifacts, expectedWorkflowSha: RUN_SHA };
 }
 
 test("analysis provenance accepts an exact protected pull-request run", () => {
   const fixture = analysisFixture();
   assert.deepEqual(validateAnalysisRun(fixture), {
     runId: 300,
+    runAttempt: 1,
     artifactId: 400,
     artifactName: `agentproof-raw-pr-42-${HEAD_SHA}`,
     artifactDigest: `sha256:${ARTIFACT_SHA256}`,
@@ -240,6 +331,771 @@ test("analysis provenance rejects wrong workflow, repository, and artifact sets"
   const missingDigest = analysisFixture();
   missingDigest.artifacts[0].digest = null;
   assert.throws(() => validateAnalysisRun(missingDigest), /digest/);
+});
+
+function controllerAnalysisFixture(workflowSha = BASE_SHA) {
+  const fixture = analysisFixture("workflow_dispatch");
+  fixture.run.actor = {
+    id: GITHUB_ACTIONS_BOT_ID,
+    login: "github-actions[bot]",
+    type: "Bot",
+  };
+  fixture.run.triggering_actor = fixture.run.actor;
+  fixture.run.head_sha = workflowSha;
+  fixture.artifacts[0].workflow_run.head_sha = workflowSha;
+  fixture.event.workflow_run.head_sha = workflowSha;
+  fixture.expectedWorkflowSha = workflowSha;
+  return fixture;
+}
+
+function publisherFixture(eventName = "workflow_dispatch", workflowSha = BASE_SHA) {
+  const { repository } = analysisFixture();
+  const workflow = {
+    id: 201,
+    name: PUBLISH_WORKFLOW_NAME,
+    path: PUBLISH_WORKFLOW_PATH,
+    state: "active",
+  };
+  return {
+    eventName,
+    expectedWorkflowSha: workflowSha,
+    repository,
+    workflow,
+    event: {
+      repository,
+      inputs: { analysis_run_id: "300", analysis_run_attempt: "1" },
+    },
+    run: {
+      id: 500,
+      run_attempt: 1,
+      workflow_id: workflow.id,
+      name: workflow.name,
+      path: workflow.path,
+      event: eventName,
+      repository,
+      head_repository: repository,
+      head_branch: "main",
+      head_sha: workflowSha,
+    },
+    context: {
+      runId: 500,
+      runAttempt: 1,
+      ref: "refs/heads/main",
+      sha: workflowSha,
+      workflowRef: `${repository.full_name}/${PUBLISH_WORKFLOW_PATH}@refs/heads/main`,
+    },
+  };
+}
+
+test("publisher native identity is bound to the protected default branch for both triggers", () => {
+  for (const eventName of ["workflow_dispatch", "workflow_run"]) {
+    assert.doesNotThrow(() => validatePublisherRun(publisherFixture(eventName)));
+    const mutations = [
+      (fixture) => {
+        fixture.run.id += 1;
+      },
+      (fixture) => {
+        fixture.run.run_attempt += 1;
+      },
+      (fixture) => {
+        fixture.run.workflow_id += 1;
+      },
+      (fixture) => {
+        fixture.run.path = ANALYSIS_WORKFLOW_PATH;
+      },
+      (fixture) => {
+        fixture.run.name = ANALYSIS_WORKFLOW_NAME;
+      },
+      (fixture) => {
+        fixture.workflow.state = "disabled_manually";
+      },
+      (fixture) => {
+        fixture.run.repository = { id: 999, full_name: "other/repo" };
+      },
+      (fixture) => {
+        fixture.run.head_repository = { id: 999, full_name: "other/repo" };
+      },
+      (fixture) => {
+        fixture.run.head_branch = "feature";
+      },
+      (fixture) => {
+        fixture.run.head_sha = HEAD_SHA;
+      },
+      (fixture) => {
+        fixture.run.event = "push";
+      },
+      (fixture) => {
+        fixture.context.ref = "refs/heads/feature";
+      },
+      (fixture) => {
+        fixture.context.workflowRef = `${fixture.repository.full_name}/${PUBLISH_WORKFLOW_PATH}@refs/heads/feature`;
+      },
+      (fixture) => {
+        fixture.event.repository = { id: 999, full_name: "other/repo" };
+      },
+    ];
+    for (const mutate of mutations) {
+      const fixture = publisherFixture(eventName);
+      mutate(fixture);
+      assert.throws(() => validatePublisherRun(fixture));
+    }
+  }
+});
+
+test("read-only consumers validate native Publisher identity without inventing event or runner context", () => {
+  for (const eventName of ["workflow_run", "workflow_dispatch"]) {
+    const { run, workflow, repository } = publisherFixture(eventName);
+    const input = {
+      run,
+      workflow,
+      repository,
+      expectedRunId: 500,
+      expectedRunAttempt: 1,
+      expectedHeadSha: BASE_SHA,
+    };
+    assert.deepEqual(validateNativePublisherRun(input), { runId: 500, runAttempt: 1 });
+    const mutations = [
+      (value) => {
+        value.expectedRunId = 501;
+      },
+      (value) => {
+        value.expectedRunAttempt = 2;
+      },
+      (value) => {
+        value.expectedHeadSha = HEAD_SHA;
+      },
+      (value) => {
+        value.expectedHeadSha = undefined;
+      },
+      (value) => {
+        value.run.event = "push";
+      },
+      (value) => {
+        value.run.path = ANALYSIS_WORKFLOW_PATH;
+      },
+      (value) => {
+        value.run.workflow_id += 1;
+      },
+      (value) => {
+        value.workflow.state = "disabled_manually";
+      },
+      (value) => {
+        value.run.repository = { id: 999, full_name: "other/repo" };
+      },
+      (value) => {
+        value.run.head_repository = { id: 999, full_name: "other/repo" };
+      },
+      (value) => {
+        value.run.head_branch = "feature";
+      },
+      (value) => {
+        value.run.head_sha = HEAD_SHA;
+      },
+      (value) => {
+        value.repository.default_branch = undefined;
+        value.run.head_branch = undefined;
+      },
+    ];
+    for (const mutate of mutations) {
+      const modified = structuredClone(input);
+      mutate(modified);
+      assert.throws(() => validateNativePublisherRun(modified));
+    }
+  }
+});
+
+test("explicit publisher ingress validates exact native Analysis identity without a synthetic event", () => {
+  const fixture = controllerAnalysisFixture();
+  fixture.event = { inputs: { analysis_run_id: "300", analysis_run_attempt: "1" } };
+  assert.equal(validateDispatchedAnalysis(fixture).runId, 300);
+  const mutations = [
+    (value) => {
+      value.event.inputs.analysis_run_id = "301";
+    },
+    (value) => {
+      value.event.inputs.analysis_run_attempt = "2";
+    },
+    (value) => {
+      value.event.inputs.extra = "unexpected";
+    },
+    (value) => {
+      value.run.run_attempt = 2;
+    },
+    (value) => {
+      value.run.head_sha = HEAD_SHA;
+    },
+    (value) => {
+      value.expectedWorkflowSha = undefined;
+    },
+    (value) => {
+      value.run.workflow_id += 1;
+    },
+    (value) => {
+      value.run.head_branch = "feature";
+    },
+    (value) => {
+      value.run.repository = { id: 999, full_name: "other/repo" };
+    },
+    (value) => {
+      value.run.head_repository = { id: 999, full_name: "other/repo" };
+    },
+    (value) => {
+      value.run.actor = { id: 12, login: "octocat", type: "User" };
+    },
+    (value) => {
+      value.run.actor.login = "other-bot";
+    },
+    (value) => {
+      value.run.actor.type = "User";
+    },
+    (value) => {
+      value.run.event = "pull_request_target";
+    },
+    (value) => {
+      value.artifacts[0].workflow_run.id = 301;
+    },
+  ];
+  for (const mutate of mutations) {
+    const modified = structuredClone(fixture);
+    mutate(modified);
+    assert.throws(() => validateDispatchedAnalysis(modified));
+  }
+  for (const badId of ["01", "1e2", " 300", "-1", "300/attempts/2", 0, null, true, 2 ** 53]) {
+    const modified = structuredClone(fixture);
+    modified.event.inputs.analysis_run_id = badId;
+    assert.throws(() => validateDispatchedAnalysis(modified), /positive integer/);
+  }
+});
+
+test("automatic workflow_run publication excludes controller runs without excluding owner refreshes", () => {
+  assert.throws(() => validateAnalysisRun(controllerAnalysisFixture()), /explicit publisher/);
+  assert.equal(validateAnalysisRun(analysisFixture("workflow_dispatch")).runId, 300);
+  assert.equal(validateAnalysisRun(analysisFixture("pull_request_target")).runId, 300);
+});
+
+test("both publisher triggers reject failed, cancelled, timed-out, or changed-attempt analyses", () => {
+  for (const conclusion of ["failure", "cancelled", "timed_out", "skipped", "neutral", null]) {
+    const owner = analysisFixture();
+    owner.run.conclusion = conclusion;
+    assert.throws(() => validateAnalysisRun(owner), /successful completed/);
+    const controller = controllerAnalysisFixture();
+    controller.event = { inputs: { analysis_run_id: "300", analysis_run_attempt: "1" } };
+    controller.run.conclusion = conclusion;
+    assert.throws(() => validateDispatchedAnalysis(controller), /successful completed/);
+  }
+  const fixture = analysisFixture();
+  fixture.run.run_attempt = 2;
+  assert.throws(() => validateAnalysisRun(fixture), /attempt changed/);
+  assert.throws(
+    () => validateCompletedAnalysisRun({ ...fixture, expectedRunId: 300, expectedRunAttempt: 1 }),
+    /attempt changed/,
+  );
+});
+
+function revalidationFixture(workflowSha = BASE_SHA) {
+  const analysis = controllerAnalysisFixture(workflowSha);
+  const handoff = evidenceHandoffFixture();
+  const prefix = "/repos/octo-org/agentproof";
+  const response = (runId) => ({
+    workflow_run_id: runId,
+    run_url: `https://api.github.com${prefix}/actions/runs/${runId}`,
+    html_url: `https://github.com/octo-org/agentproof/actions/runs/${runId}`,
+  });
+  const state = {
+    analysis,
+    runs: [{ ...analysis.run, status: "queued", conclusion: null }, analysis.run],
+    currentPullRequest: structuredClone(handoff.pullRequest),
+    currentRepository: structuredClone(analysis.repository),
+    analysisResponse: response(300),
+    publisherResponse: response(500),
+    artifactPage: { total_count: 1, artifacts: analysis.artifacts },
+    calls: [],
+    clock: 0,
+    nextRun: 0,
+    refs: [defaultRefFixture(workflowSha)],
+    nextRef: 0,
+  };
+  const request = async (path, options = {}) => {
+    state.calls.push({ path, options });
+    if (path === `${prefix}/check-runs` && options.method === "POST") {
+      return {
+        id: 600,
+        name: "AgentProof / gate",
+        app: { id: 15368 },
+        head_sha: HEAD_SHA,
+        status: "in_progress",
+        conclusion: null,
+      };
+    }
+    if (path === `${prefix}/actions/workflows/agentproof-analyze.yml`) {
+      return analysis.workflow;
+    }
+    if (path === `${prefix}/git/ref/heads/main`) {
+      return state.refs[Math.min(state.nextRef++, state.refs.length - 1)];
+    }
+    if (path === `${prefix}/actions/workflows/agentproof-analyze.yml/dispatches`) {
+      assert.equal(options.method, "POST");
+      assert.deepEqual(options.body, {
+        ref: "main",
+        inputs: { pr_number: "42", expected_head_sha: HEAD_SHA },
+      });
+      return state.analysisResponse;
+    }
+    if (path === `${prefix}/actions/runs/300`) {
+      return state.runs[Math.min(state.nextRun++, state.runs.length - 1)];
+    }
+    if (path === `${prefix}/actions/runs/300/artifacts?per_page=100`) {
+      return state.artifactPage;
+    }
+    if (path === prefix) {
+      return state.currentRepository;
+    }
+    if (path === `${prefix}/pulls/42`) {
+      return state.currentPullRequest;
+    }
+    if (path === `${prefix}/actions/workflows/agentproof-publish.yml/dispatches`) {
+      assert.equal(options.method, "POST");
+      assert.deepEqual(options.body, {
+        ref: "main",
+        inputs: { analysis_run_id: "300", analysis_run_attempt: "1" },
+      });
+      return state.publisherResponse;
+    }
+    throw new Error(`Unexpected API request: ${path}`);
+  };
+  return {
+    state,
+    input: {
+      repository: {
+        owner: "octo-org",
+        repo: "agentproof",
+        fullName: analysis.repository.full_name,
+      },
+      repositoryData: analysis.repository,
+      pullRequest: handoff.pullRequest,
+      detailsUrl: "https://github.com/octo-org/agentproof/actions/runs/250",
+      reason: "pull request edited",
+      workflowSha,
+    },
+    dependencies: {
+      request,
+      sleep: async (milliseconds) => {
+        state.clock += milliseconds;
+      },
+      now: () => state.clock,
+    },
+  };
+}
+
+test("controller invalidates, waits for the exact native Analysis, and dispatches Publisher without waiting", async () => {
+  const fixture = revalidationFixture();
+  assert.deepEqual(await dispatchRevalidation(fixture.input, fixture.dependencies), {
+    analysisRunId: 300,
+    publisherRunId: 500,
+  });
+  assert.equal(fixture.state.calls[0].path, "/repos/octo-org/agentproof/check-runs");
+  assert.equal(fixture.state.calls[0].options.body.status, "in_progress");
+  assert.equal(fixture.state.clock, 10_000);
+  assert.equal(
+    fixture.state.calls.at(-1).path,
+    "/repos/octo-org/agentproof/actions/workflows/agentproof-publish.yml/dispatches",
+  );
+  assert.equal(
+    fixture.state.calls.filter(({ path }) => path.endsWith("/actions/runs/300")).length,
+    2,
+  );
+  assert.equal(
+    fixture.state.calls.some(({ path }) => path.includes("/actions/runs/500")),
+    false,
+  );
+});
+
+test("old and equal PR bases use the independently verified current workflow revision", async () => {
+  for (const workflowSha of [BASE_SHA, RUN_SHA]) {
+    const fixture = revalidationFixture(workflowSha);
+    assert.equal(fixture.input.pullRequest.base.sha, BASE_SHA);
+    assert.deepEqual(await dispatchRevalidation(fixture.input, fixture.dependencies), {
+      analysisRunId: 300,
+      publisherRunId: 500,
+    });
+    assert.equal(fixture.input.pullRequest.base.sha, BASE_SHA);
+    assert.equal(fixture.state.nextRef, 3);
+  }
+});
+
+test("controller rejects default-tip changes before either dispatch and native default-ref changes", async () => {
+  for (const stableReads of [0, 1, 2]) {
+    const fixture = revalidationFixture(BASE_SHA);
+    fixture.state.refs = [
+      ...Array.from({ length: stableReads }, () => defaultRefFixture(BASE_SHA)),
+      defaultRefFixture(RUN_SHA),
+    ];
+    await assert.rejects(
+      dispatchRevalidation(fixture.input, fixture.dependencies),
+      /workflow revision changed/,
+    );
+    assert.equal(
+      fixture.state.calls.some(({ path }) => path.includes("agentproof-publish")),
+      false,
+    );
+    if (stableReads < 2) {
+      assert.equal(
+        fixture.state.calls.some(({ path }) => path.endsWith("agentproof-analyze.yml/dispatches")),
+        false,
+      );
+    }
+  }
+  const fixture = revalidationFixture();
+  fixture.state.currentRepository.default_branch = "renamed";
+  await assert.rejects(
+    dispatchRevalidation(fixture.input, fixture.dependencies),
+    /Repository identity changed/,
+  );
+  assert.equal(
+    fixture.state.calls.some(({ path }) => path.includes("agentproof-publish")),
+    false,
+  );
+});
+
+test("controller fails closed when dispatch details are missing, malformed or cross-repository", async () => {
+  for (const response of [
+    undefined,
+    {},
+    { workflow_run_id: "01" },
+    { workflow_run_id: "1e2" },
+    { workflow_run_id: 2 ** 53 },
+    { workflow_run_id: 300, run_url: "https://api.github.com/repos/other/repo/actions/runs/300" },
+    {
+      workflow_run_id: 300,
+      run_url: "https://api.github.com/repos/octo-org/agentproof/actions/runs/301",
+    },
+  ]) {
+    const fixture = revalidationFixture();
+    fixture.state.analysisResponse = response;
+    await assert.rejects(dispatchRevalidation(fixture.input, fixture.dependencies));
+    assert.equal(
+      fixture.state.calls.some(({ path }) => path.includes("agentproof-publish")),
+      false,
+    );
+    assert.equal(
+      fixture.state.calls.some(({ path }) => path.includes("/actions/runs?")),
+      false,
+    );
+  }
+});
+
+test("controller rejects a wrong run, attempt, workflow, repository, default branch or trusted revision", async () => {
+  const mutations = [
+    (run) => {
+      run.id = 301;
+    },
+    (run) => {
+      run.run_attempt = 2;
+    },
+    (run) => {
+      run.workflow_id = 999;
+    },
+    (run) => {
+      run.path = ".github/workflows/other.yml";
+    },
+    (run) => {
+      run.repository = { id: 999, full_name: "other/repo" };
+    },
+    (run) => {
+      run.head_branch = "feature";
+    },
+    (run) => {
+      run.head_sha = HEAD_SHA;
+    },
+    (run) => {
+      run.event = "pull_request_target";
+    },
+    (run) => {
+      run.actor = { id: 12, login: "octocat", type: "User" };
+    },
+    (run) => {
+      run.actor.login = "other-bot";
+    },
+    (run) => {
+      run.actor.type = "User";
+    },
+  ];
+  for (const mutate of mutations) {
+    const fixture = revalidationFixture();
+    fixture.state.runs = [structuredClone(fixture.state.analysis.run)];
+    mutate(fixture.state.runs[0]);
+    await assert.rejects(dispatchRevalidation(fixture.input, fixture.dependencies));
+    assert.equal(
+      fixture.state.calls.some(({ path }) => path.includes("agentproof-publish")),
+      false,
+    );
+  }
+});
+
+test("controller does not publish failed, cancelled, timed-out or indefinitely queued Analysis", async () => {
+  for (const conclusion of ["failure", "cancelled", "timed_out", "skipped", "neutral", null]) {
+    const fixture = revalidationFixture();
+    fixture.state.runs = [{ ...fixture.state.analysis.run, conclusion }];
+    await assert.rejects(
+      dispatchRevalidation(fixture.input, fixture.dependencies),
+      /without success/,
+    );
+    assert.equal(
+      fixture.state.calls.some(({ path }) => path.includes("agentproof-publish")),
+      false,
+    );
+  }
+  const fixture = revalidationFixture();
+  fixture.state.runs = [{ ...fixture.state.analysis.run, status: "queued", conclusion: null }];
+  fixture.dependencies.sleep = async () => {
+    fixture.state.clock += ANALYSIS_WAIT_MS;
+  };
+  await assert.rejects(dispatchRevalidation(fixture.input, fixture.dependencies), /bounded.*wait/);
+  assert.equal(
+    fixture.state.calls.some(({ path }) => path.includes("agentproof-publish")),
+    false,
+  );
+});
+
+test("controller rejects stale subjects, metadata and malformed artifacts before Publisher dispatch", async () => {
+  const mutations = [
+    (state) => {
+      state.currentPullRequest.head.sha = RUN_SHA;
+    },
+    (state) => {
+      state.currentPullRequest.base.sha = RUN_SHA;
+    },
+    (state) => {
+      state.currentPullRequest.body = "changed after analysis";
+    },
+    (state) => {
+      state.currentPullRequest.state = "closed";
+    },
+    (state) => {
+      state.currentPullRequest.user.login = "other-user";
+    },
+    (state) => {
+      state.currentRepository.default_branch = "other";
+    },
+    (state) => {
+      state.artifactPage.total_count = 2;
+    },
+    (state) => {
+      state.artifactPage.artifacts = [];
+      state.artifactPage.total_count = 0;
+    },
+    (state) => {
+      state.artifactPage.artifacts[0].name = `agentproof-raw-pr-43-${HEAD_SHA}`;
+    },
+    (state) => {
+      state.artifactPage.artifacts[0].name = `agentproof-raw-pr-42-${RUN_SHA}`;
+    },
+    (state) => {
+      state.artifactPage.artifacts[0].workflow_run.id = 301;
+    },
+    (state) => {
+      state.artifactPage.artifacts[0].expired = true;
+    },
+    (state) => {
+      state.artifactPage.artifacts[0].digest = null;
+    },
+  ];
+  for (const mutate of mutations) {
+    const fixture = revalidationFixture();
+    mutate(fixture.state);
+    await assert.rejects(dispatchRevalidation(fixture.input, fixture.dependencies));
+    assert.equal(
+      fixture.state.calls.some(({ path }) => path.includes("agentproof-publish")),
+      false,
+    );
+  }
+});
+
+test("controller exposes API failures rather than redispatching or guessing an Analysis", async () => {
+  const fixture = revalidationFixture();
+  const request = fixture.dependencies.request;
+  fixture.dependencies.request = async (path, options) => {
+    if (path.endsWith("/actions/runs/300")) {
+      throw new Error("native run lookup unavailable");
+    }
+    return request(path, options);
+  };
+  await assert.rejects(
+    dispatchRevalidation(fixture.input, fixture.dependencies),
+    /lookup unavailable/,
+  );
+  assert.equal(
+    fixture.state.calls.filter(({ path }) => path.endsWith("/agentproof-analyze.yml/dispatches"))
+      .length,
+    1,
+  );
+  assert.equal(
+    fixture.state.calls.some(({ path }) => path.includes("agentproof-publish")),
+    false,
+  );
+});
+
+test("publisher entrypoint resolves native provenance for both triggers and emits the exact run attempt", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "agentproof-publisher-test-"));
+  try {
+    for (const [eventName, workflowSha] of [
+      ["workflow_dispatch", BASE_SHA],
+      ["workflow_dispatch", RUN_SHA],
+      ["workflow_run", RUN_SHA],
+    ]) {
+      const analysis =
+        eventName === "workflow_dispatch"
+          ? controllerAnalysisFixture(workflowSha)
+          : analysisFixture();
+      const publisher = publisherFixture(eventName, workflowSha);
+      const event =
+        eventName === "workflow_dispatch"
+          ? publisher.event
+          : { ...analysis.event, repository: analysis.repository };
+      const eventPath = join(directory, `${eventName}-${workflowSha}.json`);
+      const outputPath = join(directory, `${eventName}-${workflowSha}.output`);
+      await writeFile(eventPath, JSON.stringify(event), "utf8");
+      const environment = {
+        GITHUB_TOKEN: "test-token",
+        GITHUB_REPOSITORY: analysis.repository.full_name,
+        GITHUB_EVENT_NAME: eventName,
+        GITHUB_EVENT_PATH: eventPath,
+        GITHUB_RUN_ID: "500",
+        GITHUB_RUN_ATTEMPT: "1",
+        GITHUB_REF: publisher.context.ref,
+        GITHUB_SHA: publisher.context.sha,
+        GITHUB_WORKFLOW_REF: publisher.context.workflowRef,
+        GITHUB_OUTPUT: outputPath,
+      };
+      const responses = new Map([
+        ["/repos/octo-org/agentproof", analysis.repository],
+        ["/repos/octo-org/agentproof/git/ref/heads/main", defaultRefFixture(workflowSha)],
+        ["/repos/octo-org/agentproof/actions/runs/500", publisher.run],
+        ["/repos/octo-org/agentproof/actions/workflows/agentproof-publish.yml", publisher.workflow],
+        ["/repos/octo-org/agentproof/actions/runs/300", analysis.run],
+        ["/repos/octo-org/agentproof/actions/workflows/agentproof-analyze.yml", analysis.workflow],
+        [
+          "/repos/octo-org/agentproof/actions/runs/300/artifacts?per_page=100",
+          {
+            total_count: 1,
+            artifacts: analysis.artifacts,
+          },
+        ],
+      ]);
+      const request = async (path) => {
+        assert.ok(responses.has(path), `Unexpected API path ${path}`);
+        return responses.get(path);
+      };
+      await runWorkflowScript("validate-workflow-run", environment, request);
+      const output = await readFile(outputPath, "utf8");
+      assert.match(output, new RegExp(`^workflow_sha=${workflowSha}$`, "mu"));
+      assert.match(output, /^run_id=300$/mu);
+      assert.match(output, /^run_attempt=1$/mu);
+      assert.match(output, /^artifact_id=400$/mu);
+      assert.match(output, new RegExp(`^head_sha=${HEAD_SHA}$`, "mu"));
+      responses.set("/repos/octo-org/agentproof/git/ref/heads/main", defaultRefFixture(HEAD_SHA));
+      await assert.rejects(
+        runWorkflowScript("validate-workflow-run", environment, request),
+        /workflow revision changed/,
+      );
+      responses.set(
+        "/repos/octo-org/agentproof/git/ref/heads/main",
+        defaultRefFixture(workflowSha),
+      );
+      if (eventName === "workflow_dispatch") {
+        analysis.run.head_sha = HEAD_SHA;
+        await assert.rejects(
+          runWorkflowScript("validate-workflow-run", environment, request),
+          /trusted workflow revision/,
+        );
+      }
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("workflow templates retain read-only Analysis, bounded controllers and disjoint publisher ingress", async () => {
+  const templates = new URL("../../templates/github-workflows/", import.meta.url);
+  const workflowDirectory = existsSync(templates)
+    ? templates
+    : new URL("../workflows/", import.meta.url);
+  const [analysis, disposition, revalidate, publisher] = await Promise.all(
+    ["analyze", "disposition", "revalidate", "publish"].map(async (name) =>
+      parseYaml(await readFile(new URL(`agentproof-${name}.yml`, workflowDirectory), "utf8")),
+    ),
+  );
+  assert.deepEqual(analysis.permissions, { contents: "read", "pull-requests": "read" });
+  assert.equal(analysis.jobs.analyze["timeout-minutes"], 15);
+  assert.equal(analysis.jobs.analyze.permissions, undefined);
+  assert.equal(disposition.jobs.revalidate["timeout-minutes"], 25);
+  assert.equal(disposition.jobs["refresh-pull-request"]["timeout-minutes"], 25);
+  assert.equal(revalidate.jobs.dispatch["timeout-minutes"], 25);
+  assert.equal(revalidate.jobs.dispatch.strategy["max-parallel"], 4);
+  for (const permissions of [disposition.permissions, revalidate.jobs.dispatch.permissions]) {
+    assert.deepEqual(permissions, {
+      actions: "write",
+      checks: "write",
+      contents: "read",
+      "pull-requests": "read",
+    });
+  }
+  assert.equal(publisher.jobs.publish.permissions.actions, "read");
+  assert.equal(publisher.jobs.publish.permissions.contents, "read");
+  assert.equal(publisher.jobs.publish.concurrency["cancel-in-progress"], false);
+  assert.match(publisher.jobs.publish.concurrency.group, /^agentproof-gate-pr-/u);
+  assert.deepEqual(Object.keys(publisher.on.workflow_dispatch.inputs), [
+    "analysis_run_id",
+    "analysis_run_attempt",
+  ]);
+  assert.match(publisher.jobs.provenance.if, /actor\.id != 41898282/u);
+  assert.match(
+    publisher.jobs.provenance.if,
+    /github\.ref_name == github\.event\.repository\.default_branch/u,
+  );
+  const analysisSteps = analysis.jobs.analyze.steps;
+  assert.equal(analysisSteps[0].with.ref, "${{ github.workflow_sha }}");
+  assert.equal(
+    analysisSteps.find((step) => step.with?.path === "trusted").with.ref,
+    "${{ steps.pr.outputs.base_sha }}",
+  );
+  for (const job of [
+    disposition.jobs.revalidate,
+    disposition.jobs["refresh-pull-request"],
+    revalidate.jobs.discover,
+    revalidate.jobs.dispatch,
+  ]) {
+    assert.equal(job.steps[0].with.ref, "${{ github.workflow_sha }}");
+  }
+  const publishSteps = publisher.jobs.publish.steps;
+  assert.equal(
+    publisher.jobs.publish.env.EXPECTED_WORKFLOW_SHA,
+    "${{ needs.provenance.outputs.workflow_sha }}",
+  );
+  assert.equal(
+    publishSteps.find((step) => step.with?.path === "trusted").with.ref,
+    "${{ steps.metadata.outputs.base_sha }}",
+  );
+  assert.ok(
+    publishSteps.some(
+      (step) =>
+        step["working-directory"] === "bootstrap" &&
+        step.run.includes("npm run build --workspace @agentproof/evidence-core"),
+    ),
+  );
+  assert.equal(
+    publishSteps.find((step) => step.id === "publish").run,
+    "node bootstrap/.github/scripts/publish-check.mjs",
+  );
+  assert.ok(
+    publishSteps.some(
+      (step) => step.run === "node bootstrap/.github/scripts/collect-dispositions.mjs",
+    ),
+  );
+  assert.match(
+    publishSteps.find((step) => step.id === "evaluate").run,
+    /^node trusted\/packages\/evidence-cli\/dist\/cli\.js evaluate .*--policy "\$GITHUB_WORKSPACE\/trusted\/policy\/release-policy\.yml"/u,
+  );
 });
 
 test("comment edits and deletes revalidate commands without trusting the editor", () => {
@@ -325,7 +1181,7 @@ function evidenceHandoffFixture() {
     baseSha: pullRequest.base.sha,
     headRef: pullRequest.head.ref,
     headSha: pullRequest.head.sha,
-    samplePath: "sample-repo",
+    appPath: APPLICATION_PATH,
   };
   const rawEvidence = {
     schemaVersion: "1.0.0",
@@ -349,6 +1205,172 @@ function evidenceHandoffFixture() {
   return { metadata, rawEvidence, expected, repository, pullRequest };
 }
 
+test("analysis resolver separates current workflow bootstrap from immutable old PR policy base", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "agentproof-resolver-test-"));
+  try {
+    for (const eventName of ["pull_request_target", "workflow_dispatch"]) {
+      const { repository, pullRequest } = evidenceHandoffFixture();
+      const metadataPath = join(directory, `${eventName}-metadata.json`);
+      const eventPath = join(directory, `${eventName}-event.json`);
+      await writeFile(
+        eventPath,
+        JSON.stringify(
+          eventName === "pull_request_target"
+            ? { pull_request: pullRequest }
+            : { inputs: { pr_number: "42" } },
+        ),
+        "utf8",
+      );
+      const environment = {
+        GITHUB_TOKEN: "test-token",
+        GITHUB_REPOSITORY: repository.full_name,
+        GITHUB_EVENT_NAME: eventName,
+        GITHUB_EVENT_PATH: eventPath,
+        GITHUB_SHA: eventName === "workflow_dispatch" ? RUN_SHA : BASE_SHA,
+        GITHUB_WORKFLOW_SHA: RUN_SHA,
+        GITHUB_REF: "refs/heads/main",
+        GITHUB_WORKFLOW_REF: `${repository.full_name}/${ANALYSIS_WORKFLOW_PATH}@refs/heads/main`,
+        GITHUB_OUTPUT: join(directory, `${eventName}.output`),
+        INPUT_PR_NUMBER: "42",
+        EXPECTED_HEAD_SHA: HEAD_SHA,
+        METADATA_PATH: metadataPath,
+      };
+      const responses = new Map([
+        ["/repos/octo-org/agentproof", repository],
+        ["/repos/octo-org/agentproof/pulls/42", pullRequest],
+        ["/repos/octo-org/agentproof/git/ref/heads/main", defaultRefFixture(RUN_SHA)],
+      ]);
+      const request = async (path) => {
+        assert.ok(responses.has(path), `Unexpected API path ${path}`);
+        return responses.get(path);
+      };
+      await runWorkflowScript("resolve-pr", environment, request);
+      const metadata = JSON.parse(await readFile(metadataPath, "utf8"));
+      assert.deepEqual(metadata, evidenceHandoffFixture().metadata);
+      pullRequest.head.sha = RUN_SHA;
+      await assert.rejects(
+        runWorkflowScript("resolve-pr", environment, request),
+        /head changed before analysis/,
+      );
+      pullRequest.head.sha = HEAD_SHA;
+      responses.set("/repos/octo-org/agentproof/git/ref/heads/main", defaultRefFixture(HEAD_SHA));
+      await assert.rejects(
+        runWorkflowScript("resolve-pr", environment, request),
+        /workflow revision changed/,
+      );
+      responses.set("/repos/octo-org/agentproof/git/ref/heads/main", defaultRefFixture(RUN_SHA));
+      environment.GITHUB_WORKFLOW_REF = `${repository.full_name}/${ANALYSIS_WORKFLOW_PATH}@refs/heads/feature`;
+      await assert.rejects(
+        runWorkflowScript("resolve-pr", environment, request),
+        /trusted default-branch workflow/,
+      );
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("bootstrap handoff retains source-attempt, workflow, controller and immutable PR checks for old bases", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "agentproof-metadata-test-"));
+  const incoming = join(directory, "incoming");
+  await mkdir(incoming);
+  try {
+    const baseline = evidenceHandoffFixture();
+    const metadataPath = join(incoming, "metadata.json");
+    const rawPath = join(incoming, "raw-evidence.json");
+    await writeFile(metadataPath, JSON.stringify(baseline.metadata), "utf8");
+    await writeFile(rawPath, JSON.stringify(baseline.rawEvidence), "utf8");
+    const environment = {
+      GITHUB_TOKEN: "test-token",
+      GITHUB_REPOSITORY: baseline.repository.full_name,
+      GITHUB_EVENT_NAME: "workflow_dispatch",
+      GITHUB_SERVER_URL: "https://github.com",
+      GITHUB_OUTPUT: join(directory, "outputs"),
+      INCOMING_PATH: incoming,
+      METADATA_PATH: metadataPath,
+      RAW_EVIDENCE_PATH: rawPath,
+      EXPECTED_PR_NUMBER: "42",
+      EXPECTED_HEAD_SHA: HEAD_SHA,
+      EXPECTED_RUN_ID: "300",
+      EXPECTED_RUN_ATTEMPT: "1",
+      EXPECTED_ARTIFACT_NAME: baseline.expected.artifactName,
+      EXPECTED_WORKFLOW_SHA: RUN_SHA,
+    };
+    for (const mutate of [
+      undefined,
+      (state) => {
+        state.analysis.run.run_attempt = 2;
+      },
+      (state) => {
+        state.analysis.run.head_sha = BASE_SHA;
+      },
+      (state) => {
+        state.analysis.run.actor.login = "other-bot";
+      },
+      (state) => {
+        state.analysis.run.event = "pull_request_target";
+      },
+      (state) => {
+        state.reference.object.sha = HEAD_SHA;
+      },
+      (state) => {
+        state.handoff.repository.default_branch = "renamed";
+      },
+      (state) => {
+        state.handoff.pullRequest.head.sha = RUN_SHA;
+      },
+      (state) => {
+        state.handoff.pullRequest.base.sha = RUN_SHA;
+      },
+      (state) => {
+        state.handoff.pullRequest.body = "changed during handoff";
+      },
+      ...["failure", "cancelled", "timed_out"].map((conclusion) => (state) => {
+        state.analysis.run.conclusion = conclusion;
+      }),
+    ]) {
+      const state = {
+        analysis: controllerAnalysisFixture(RUN_SHA),
+        handoff: evidenceHandoffFixture(),
+        reference: defaultRefFixture(RUN_SHA),
+      };
+      mutate?.(state);
+      const responses = new Map([
+        ["/repos/octo-org/agentproof", state.handoff.repository],
+        ["/repos/octo-org/agentproof/pulls/42", state.handoff.pullRequest],
+        ["/repos/octo-org/agentproof/git/ref/heads/main", state.reference],
+        [
+          "/repos/octo-org/agentproof/git/ref/heads/renamed",
+          {
+            ...state.reference,
+            ref: "refs/heads/renamed",
+            url: "https://api.github.com/repos/octo-org/agentproof/git/refs/heads/renamed",
+          },
+        ],
+        ["/repos/octo-org/agentproof/actions/runs/300", state.analysis.run],
+        [
+          "/repos/octo-org/agentproof/actions/workflows/agentproof-analyze.yml",
+          state.analysis.workflow,
+        ],
+      ]);
+      const run = () =>
+        runWorkflowScript("read-metadata", environment, async (path) => {
+          assert.ok(responses.has(path), `Unexpected API path ${path}`);
+          return responses.get(path);
+        });
+      if (mutate) await assert.rejects(run());
+      else {
+        await run();
+        const output = await readFile(environment.GITHUB_OUTPUT, "utf8");
+        assert.match(output, new RegExp(`^base_sha=${BASE_SHA}$`, "mu"));
+        assert.match(output, new RegExp(`^head_sha=${HEAD_SHA}$`, "mu"));
+      }
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("evidence handoff binds artifact content to current GitHub state", () => {
   const fixture = evidenceHandoffFixture();
   assert.deepEqual(validateEvidenceHandoff(fixture), {
@@ -358,6 +1380,30 @@ test("evidence handoff binds artifact content to current GitHub state", () => {
   });
   fixture.pullRequest.body = "edited after analysis";
   assert.throws(() => validateEvidenceHandoff(fixture), /body changed/);
+});
+
+test("evidence handoff rejects an application path not selected by protected code", () => {
+  for (const appPath of [
+    `${APPLICATION_PATH}/unexpected`,
+    "..",
+    "/tmp/app",
+    "C:\\app",
+    undefined,
+  ]) {
+    const fixture = evidenceHandoffFixture();
+    fixture.metadata.appPath = appPath;
+    assert.throws(() => validateEvidenceHandoff(fixture), /application path/);
+  }
+});
+
+test("evidence handoff accepts the legacy path alias but rejects conflicting values", () => {
+  const fixture = evidenceHandoffFixture();
+  fixture.metadata.samplePath = fixture.metadata.appPath;
+  assert.equal(validateEvidenceHandoff(fixture).headSha, HEAD_SHA);
+  delete fixture.metadata.appPath;
+  assert.equal(validateEvidenceHandoff(fixture).headSha, HEAD_SHA);
+  fixture.metadata.appPath = `${APPLICATION_PATH}/unexpected`;
+  assert.throws(() => validateEvidenceHandoff(fixture), /aliases conflict/);
 });
 
 test("Check Runs API payloads separate immutable create fields from updates", () => {
@@ -415,4 +1461,31 @@ test("checked-in ruleset has the required fail-closed controls", async () => {
     await readFile(new URL("../rulesets/agentproof.json", import.meta.url), "utf8"),
   );
   assert.equal(validateRulesetPayload(payload), payload);
+});
+
+test("toolkit ruleset requires CI alone without weakening independent review protections", async () => {
+  const [application, toolkit] = await Promise.all(
+    ["agentproof.json", "agentproof-toolkit.json"].map(async (name) =>
+      JSON.parse(await readFile(new URL(`../rulesets/${name}`, import.meta.url), "utf8")),
+    ),
+  );
+  validateRulesetPayload(application);
+  const { name, rules, ...scope } = toolkit;
+  const { name: applicationName, rules: applicationRules, ...applicationScope } = application;
+  assert.notEqual(name, applicationName);
+  assert.equal(name, "AgentProof toolkit protection");
+  assert.deepEqual(scope, applicationScope);
+  const expectedRules = structuredClone(applicationRules);
+  const review = expectedRules.find((rule) => rule.type === "pull_request").parameters;
+  Object.assign(review, {
+    allowed_merge_methods: ["merge", "squash", "rebase"],
+    require_extra_approval_for_unattributed_changes: true,
+    required_reviewers: [],
+  });
+  expectedRules.find(
+    (rule) => rule.type === "required_status_checks",
+  ).parameters.required_status_checks = [
+    { context: "Build, lint, and test", integration_id: 15368 },
+  ];
+  assert.deepEqual(rules, expectedRules);
 });

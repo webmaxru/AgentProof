@@ -77,8 +77,8 @@ export function rawEvidenceFixture(): RawEvidence {
           skipped: 0,
           testCases: [
             {
-              id: "expense-approval.authorization.non-approver-denied",
-              name: "[AP-ID:expense-approval.authorization.non-approver-denied]",
+              id: "authorization.non-approver-denied",
+              name: "[AP-ID:authorization.non-approver-denied]",
               status: "passed",
             },
           ],
@@ -128,7 +128,7 @@ export function rawEvidenceFixture(): RawEvidence {
             classification: "synthetic",
             retentionDays: 30,
             deletionMethod: "automatic-expiry",
-            owner: "expense-api",
+            owner: "test-fixture",
           },
           missingFields: [],
         },
@@ -173,7 +173,7 @@ export function validAcceptance(
     actorPermission: "maintain",
     body: `/agentproof accept-exception ${FINDING_IDS.dataRetention}
 sha: ${HEAD_SHA}
-reason: Synthetic demo data is bounded while its declaration is corrected.
+reason: Synthetic test data is bounded while its declaration is corrected.
 expires: 2026-09-20`,
     recordedAt: "2026-09-02T08:20:00.000Z",
     sourceState: "active",

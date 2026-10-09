@@ -27,6 +27,7 @@ const repositoryRelativePathSchema = z
       !value.startsWith("/") &&
       !value.startsWith("\\") &&
       !/^[A-Za-z]:/u.test(value) &&
+      !value.includes("\0") &&
       !value.split(/[\\/]/u).includes(".."),
     "Expected a repository-relative path.",
   );
@@ -99,7 +100,8 @@ export const pullRequestAnalyzeMetadataSchema = z
     baseSha: shaSchema,
     headRef: z.string().min(1).max(255).optional(),
     headSha: shaSchema,
-    samplePath: repositoryRelativePathSchema.default("sample-repo"),
+    appPath: repositoryRelativePathSchema.optional(),
+    samplePath: repositoryRelativePathSchema.optional(),
   })
   .strict()
   .superRefine((metadata, context) => {
@@ -110,7 +112,22 @@ export const pullRequestAnalyzeMetadataSchema = z
         message: "baseSha and headSha must identify different commits.",
       });
     }
-  });
+    if (
+      metadata.appPath !== undefined &&
+      metadata.samplePath !== undefined &&
+      metadata.appPath !== metadata.samplePath
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["appPath"],
+        message: "appPath and the legacy samplePath alias must agree.",
+      });
+    }
+  })
+  .transform(({ appPath, samplePath, ...metadata }) => ({
+    ...metadata,
+    appPath: appPath ?? samplePath ?? ".",
+  }));
 
 export type PullRequestAnalyzeMetadata = z.infer<typeof pullRequestAnalyzeMetadataSchema>;
 export type AnalyzeMetadata = ReportAnalyzeMetadata | PullRequestAnalyzeMetadata;

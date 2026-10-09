@@ -44,6 +44,8 @@ guess, abbreviate, or copy identity from model prose or the mutable canvas.
    edited-away, or deleted state.
 7. For assembly, one final evidence document and one or more trusted
    `review-fragment` documents for the same immutable subject.
+8. Independently resolved current default-branch name and workflow revision,
+   separate from the PR policy base, plus native source run IDs and attempts.
 
 Never invent an actor permission, timestamp, workflow URL, finding, reviewer
 note, or digest.
@@ -55,6 +57,10 @@ note, or digest.
   merge refs, and 64-character SHA-256 values in commit-SHA fields.
 - Require `baseSha != headSha`, `policy.baseSha == baseSha`, and every finding
   and reviewer-note `sourceSha == headSha`.
+- Do not require the PR policy base to equal the current workflow SHA. An
+  unchanged older PR base is valid; a base changing during analysis is not.
+  Resolve current workflow code from native repository/default-ref state,
+  never from producer metadata or the PR head.
 - A disposition is current only when its `boundHeadSha` equals the live
   40-character head SHA. Older SHAs are history and never effective.
 - Resolve the base and head through GitHub immediately before analysis, after
@@ -65,6 +71,13 @@ note, or digest.
 - Require the evidence repository, PR, base, head, schema, policy base, policy
   digest, and source workflow to match independently. Equality of one SHA alone
   is not sufficient.
+- Do not parse an Actions workflow-run ID from a Check Run's `details_url`:
+  GitHub may use `https://github.com/OWNER/REPO/runs/CHECK_ID`. Resolve the
+  publisher from the genuine current-head check's `[Workflow run]` footer in
+  `output.summary` and the final artifact's `workflowRunUrl`. Independently
+  verify the expected GitHub Actions app, run repository/ID/name/path/event,
+  artifact identity, subject SHAs, and canonical digest against native GitHub
+  records and the protected workflow; matching links alone are insufficient.
 
 ## Deterministic workflow
 
@@ -74,6 +87,12 @@ Resolve the live PR through GitHub. In the authoritative workflow, check out:
 
 - trusted analyzer/evaluator and policy from the protected base SHA; and
 - the untrusted subject from the exact head SHA.
+
+Resolve and verify the current default-branch workflow revision separately.
+Use that current checkout for orchestration, disposition collection, metadata
+handoff and publication, including its evidence-core validator. Do not run an
+older PR base's publication scripts or substitute current policy for the
+PR-base policy. An old base must not bypass current attempt/controller guards.
 
 Run subject analysis with no secrets, no persisted credentials, and read-only
 repository/PR access. Never execute PR-controlled package scripts with a
@@ -96,12 +115,16 @@ Create `.agentproof/analyze-metadata.json` with exactly this shape:
   "baseSha": "0123456789abcdef0123456789abcdef01234567",
   "headRef": "feature-branch",
   "headSha": "89abcdef0123456789abcdef0123456789abcdef",
-  "samplePath": "sample-repo"
+  "appPath": "."
 }
 ```
 
 The two example SHAs are placeholders and must be replaced with independently
-resolved full SHAs.
+resolved full SHAs. Resolve `appPath` from the protected workflow's
+`APPLICATION_PATH` setting; use `"."` for a root application or the reviewed
+contained path for a nested application. Schema `1.0.0` also accepts the legacy
+`samplePath` alias and rejects conflicting aliases. Do not trust the path from
+PR-controlled content.
 
 ### 3. Analyze
 
@@ -190,6 +213,50 @@ do not become fabricated notes or passes.
 Comment creation/edit/deletion, a new commit, expiry, and the six-hour/manual
 revalidation path must recollect current GitHub state and rerun trusted analysis.
 
+For automatic refresh, verify the controller's exact native Analysis run ID
+and attempt, then the explicitly dispatched Publisher run. The controller
+requires REST API `2026-03-10` dispatch details, waits at most 20 minutes for
+Analysis, rechecks the PR, and exits after dispatching Publisher; it does not
+wait while holding Publisher's gate lock. A successful controller dispatch is
+not a completed gate.
+
+Owner-origin Analysis uses the native `workflow_run` ingress. Bot-origin
+Analysis uses Publisher's `workflow_dispatch` ingress with `analysis_run_id`
+and `analysis_run_attempt`; it is excluded from the completion ingress to avoid
+duplicates. Independently verify the Publisher workflow ID/name/path, native
+run ID/attempt/event/repository, default-branch ref and SHA, then the exact
+successful Analysis and artifact identity. Never merely widen an accepted
+event string, invent a completion event, infer an Analysis from the latest run,
+or ignore changed attempts or PR body/head.
+
+For dispatched Analysis, native `run.head_sha` must equal the independently
+resolved workflow revision, not `metadata.baseSha`. A `pull_request_target`
+run instead reports the PR head in native `head_sha`; retain that trigger's
+native PR/artifact association checks. Re-read the native repository's default
+branch identity and ref tip at handoff and before writes. If either changes,
+leave the gate blocking and obtain new current-revision analysis through the
+authorized workflow; do not update frozen subject branches as a workaround.
+
+An external read-only consumer does not have authentic runner context or
+necessarily access to dispatch inputs. It may reuse `validateNativePublisherRun`
+with native records and an independently trusted workflow revision, run ID and
+attempt. That verifies Publisher identity only, not completion, a passing gate,
+or independently observed dispatch inputs. Do not synthesize an event or
+`GITHUB_*` context to call the workflow-specific validator; keep unavailable
+source-linkage evidence explicit.
+
+`resolveTrustedWorkflowRevision({ repository, expectedSha })` can independently
+check the native default Git ref using GET-only access. Supply freshly obtained
+repository metadata; reusing its old `default_branch` value is not a fresh
+default-branch identity check. An expected SHA is a comparison, not authority.
+
+If dispatch details are unavailable, a wait expires, or no validated Publisher
+finishes, retain the blocking/pending result and escalate to an owner. The owner
+may use a new default-branch Analysis dispatch for the current full head SHA;
+this read-only skill must not dispatch it. Local controller tests do not prove
+live comment/scheduled/expiry refresh, and deployment to a protected base
+remains a separate human-controlled step.
+
 ## Finding and gate semantics
 
 - `pass`: affirmative, parseable evidence satisfies the protected rule for this
@@ -250,7 +317,9 @@ release, or make a certification claim while stopped.
 - **Trusted publisher:** only artifact/content reads and the bounded check/PR
   summary writes configured by the protected workflow; it never runs PR code.
 - **Disposition/revalidation workflows:** read current PR/comment state and may
-  dispatch trusted analysis; they never decide or approve an exception.
+  invalidate the gate, wait for an exact read-only Analysis run, and dispatch
+  trusted Publisher using their existing Actions/check scopes; they never
+  decide or approve an exception.
 
 Escalate test/authorization ambiguity to the Test Reviewer and code owner,
 dependency/advisory ambiguity to the Security Reviewer and security owner,

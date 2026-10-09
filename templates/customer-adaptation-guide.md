@@ -46,7 +46,11 @@ Keep policy on the protected base branch, validate it against schema, record its
 digest, and prevent a PR from evaluating itself against a weakened policy.
 Passing means only that these configured rules passed for the identified SHA.
 
-## 3. Replace synthetic collectors deliberately
+## 3. Integrate or adapt collectors deliberately
+
+Follow [GitHub integration](../docs/github-setup.md) for root/nested application
+selection, trusted Vitest globs, root-lockfile audit, and workflow template
+installation. The kit contains no application to copy.
 
 - Use machine-readable reports with tool/version/time/source identifiers.
 - Preserve exit codes and advisory/rule IDs.
@@ -84,11 +88,9 @@ reviewer configuration. **Do not enable a reviewer automation** unless:
    unrelated MCP, implicit edit/apply-patch, and broad shell/network capabilities
    are absent.
 
-On 2026-09-03, repository reviewers became selectable after adding the private
-lab as an App project, and opened/synchronized events ran. The gate still failed:
-after reducing 50 picker tools to 21 read-only operations, the runtime exposed
-`functions.apply_patch`, `functions.bash`, and broader Actions access. The
-candidate made no automation mutation and was disabled.
+Historical trials found mutation, shell, and broader Actions capabilities after
+picker narrowing. That limitation must be rechecked on the actual runtime;
+dispatch success and prompt restraint do not establish safe permissions.
 
 If a future product version passes the gate, the automation remains personal
 and stored outside Git. Enterprise-managed settings, picker selections, and

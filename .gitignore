@@ -3,7 +3,6 @@ coverage/
 !packages/evidence-cli/tests/fixtures/coverage/
 !packages/evidence-cli/tests/fixtures/coverage/*.json
 packages/*/dist/
-sample-repo/dist/
 *.tsbuildinfo
 .env
 .env.*

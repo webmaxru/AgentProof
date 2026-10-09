@@ -11,3 +11,6 @@ sample-repo/dist/
 .agentproof/
 agentproof-evidence-*.json
 demo/fallback/*.mp4
+
+# Local challenge/submission materials are intentionally kept out of product branches.
+/hackathon-2026/

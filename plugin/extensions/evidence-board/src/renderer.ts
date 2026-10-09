@@ -9,7 +9,9 @@ const HTML = String.raw`<!doctype html>
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      background: var(--background-color-default, #ffffff);
+      background:
+        radial-gradient(circle at top left, rgba(9, 105, 218, 0.12), transparent 28%),
+        linear-gradient(180deg, #f6f8fa 0%, #ffffff 26%, #f6f8fa 100%);
       color: var(--text-color-default, #1f2328);
       font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
       font-size: var(--text-body-medium, 14px);
@@ -49,11 +51,63 @@ const HTML = String.raw`<!doctype html>
       z-index: 10;
       padding: 10px 16px;
       border-bottom: 1px solid var(--border-color-default, #d0d7de);
-      background: color-mix(in srgb, var(--true-color-blue, #0969da) 13%, var(--background-color-default, #fff));
+      background: linear-gradient(90deg, rgba(9, 105, 218, 0.15), rgba(31, 35, 40, 0.02));
       font-weight: var(--font-weight-semibold, 600);
     }
     .shell { max-width: 1240px; margin: 0 auto; padding: 20px; }
     .heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+    .hero {
+      margin-top: 18px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.5fr) minmax(260px, 0.95fr);
+      gap: 16px;
+      padding: 18px;
+      border: 1px solid rgba(9, 105, 218, 0.2);
+      border-radius: 14px;
+      background: linear-gradient(135deg, rgba(9, 105, 218, 0.08), rgba(31, 35, 40, 0.02));
+      box-shadow: 0 10px 24px rgba(31, 35, 40, 0.05);
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 10px;
+      border: 1px solid rgba(9, 105, 218, 0.2);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.7);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--true-color-blue, #0969da);
+    }
+    .hero-copy h1 {
+      margin: 12px 0 10px;
+      font-size: clamp(24px, 3vw, 36px);
+      line-height: 1.12;
+    }
+    .hero-copy p {
+      max-width: 60ch;
+      margin: 0;
+      color: var(--text-color-muted, #656d76);
+      font-size: 15px;
+    }
+    .hero-panel {
+      display: grid;
+      gap: 10px;
+      align-content: start;
+    }
+    .hero-metric {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border-color-default, #d0d7de);
+      background: rgba(255, 255, 255, 0.82);
+    }
+    .hero-metric strong { font-size: 18px; }
+    .hero-metric .muted { font-size: 12px; }
     .muted { color: var(--text-color-muted, #656d76); }
     .badge, .state, .severity {
       display: inline-flex;
@@ -509,6 +563,38 @@ const HTML = String.raw`<!doctype html>
 
       app.append(
         node("div", { className: "heading" }, headingChildren),
+        node("section", { className: "hero" }, [
+          node("div", { className: "hero-copy" }, [
+            node("div", { className: "eyebrow", text: "Release control room" }),
+            node("h1", { text: "The exact change is either evidence-backed or it is not." }),
+            node("p", {
+              text: "This board turns a GitHub pull request into a single decision surface: same-SHA facts, clear blockers, and a human-ready command path without accepting the risk of an unreviewed merge."
+            })
+          ]),
+          node("div", { className: "hero-panel" }, [
+            node("div", { className: "hero-metric" }, [
+              node("div", {}, [
+                node("div", { className: "muted", text: "Gate" }),
+                node("strong", { text: documentValue.gate.conclusion.toUpperCase() })
+              ]),
+              node("span", { className: "state " + documentValue.gate.conclusion, text: documentValue.gate.conclusion })
+            ]),
+            node("div", { className: "hero-metric" }, [
+              node("div", {}, [
+                node("div", { className: "muted", text: "Head SHA" }),
+                node("strong", { text: documentValue.headSha.slice(0, 12) })
+              ]),
+              node("span", { className: "badge", text: "Bound" })
+            ]),
+            node("div", { className: "hero-metric" }, [
+              node("div", {}, [
+                node("div", { className: "muted", text: "Open findings" }),
+                node("strong", { text: String(board.counts.fail + board.counts.unknown + board.counts.exception) })
+              ]),
+              node("span", { className: "muted", text: "Needs attention" })
+            ])
+          ])
+        ]),
         node("section", { className: "panel metadata", ariaLabel: "Evidence identity" }, [
           datum("Head SHA", documentValue.headSha, true),
           datum("Base SHA", documentValue.baseSha, true),

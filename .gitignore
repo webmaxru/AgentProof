@@ -9,3 +9,7 @@ packages/*/dist/
 !.env.example
 .agentproof/
 agentproof-evidence-*.json
+demo/fallback/*.mp4
+
+# Local challenge/submission materials are intentionally kept out of product branches.
+/hackathon-2026/

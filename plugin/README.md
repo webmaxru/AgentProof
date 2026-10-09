@@ -39,6 +39,12 @@ new published version. Direct repository installs currently work but are
 deprecated. Development `--plugin-dir` loads are live and take effect in the
 next session.
 
+The Evidence Board is the product hero. It is the decision surface that makes the
+same-SHA release story visible, reviewable, and easy to explain in a live demo.
+The canvas is the clearest artifact for judges and enterprise buyers because it
+translates technical evidence into a release conversation they can read in
+seconds.
+
 The marketplace follows the default branch. Before the migration PR is merged
 by a human, use the reviewed migration checkout with `--plugin-dir` rather than
 claiming the default-branch install already contains these changes.

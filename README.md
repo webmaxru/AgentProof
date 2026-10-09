@@ -10,6 +10,11 @@ specialists explain the evidence; accountable humans decide whether to remediate
 or accept an eligible exception. Independent code review remains a separate
 requirement enforced by the target repository's rules.
 
+The Experience is built around the Evidence Board canvas: it is the release
+control room, not a side panel. It turns the same SHA-bound evidence into a
+clear, decision-ready narrative that an engineering lead and a business owner
+can both understand in under a minute.
+
 Concrete application, demo, and hackathon resources live in the
 [reference implementation](https://github.com/webmaxru/agentproof-demo).
 

@@ -5,7 +5,7 @@
 
 AgentProof is a reusable release-evidence kit, not an application. Deterministic
 collectors produce evidence for one pull-request head SHA. A trusted evaluator
-applies protected-base policy and publishes `AgentProof / gate`. Read-only
+applies protected-base policy and publishes `AgentProof / gate`. Tool-free public-packet
 specialists explain the evidence; accountable humans decide whether to remediate
 or accept an eligible exception. Independent code review remains a separate
 requirement enforced by the target repository's rules.
@@ -28,7 +28,7 @@ authorship, or release-suitability certification.
 | `packages/evidence-core`                           | Versioned contracts, canonical digests, policy evaluation, disposition validation, and same-SHA assembly.                                    |
 | `packages/evidence-cli`                            | Trusted Vitest/coverage collection, root-lockfile npm audit, retention declarations, origin parsing, and analyze/evaluate/assemble commands. |
 | `templates/github-workflows` and `.github/scripts` | Deployable read-only analysis, trusted publication, authorized-comment processing, and revalidation.                                         |
-| `plugin`                                           | Test, security, and policy reviewers; Evidence Assembler; two skills; mutable Evidence Board.                                                |
+| `plugin`                                           | Tool-free public-packet specialists; legacy Evidence Assembler profile; two skills; mutable Evidence Board.                                  |
 | `policy`                                           | Schemas and a starting policy to adapt on the protected base, never through the PR being evaluated.                                          |
 | `templates` and `docs`                             | Integration, least-privilege, exception, independent-review, and adoption guidance.                                                          |
 
@@ -122,10 +122,23 @@ marketplace can still describe the previous package. To evaluate the proposed
 kit before then, use an explicitly reviewed migration checkout with
 `--plugin-dir`; do not present it as a migrated default-branch install.
 
-After current-SHA deterministic evidence exists, manually start separate Test,
-Security, and Policy Reviewer sessions with only the necessary same-repository
-read tools. Then run the Evidence Assembler manually. Do not substitute a
-general-purpose, mutation-capable agent for a read-only reviewer.
+Version `0.3.0` specialists use only the
+[tool-free public-evidence-packet mode](docs/public-packet-review.md). A separate
+trusted host resolves current native evidence and policy, enforces zero tools,
+verifies native telemetry, and rechecks freshness. The model returns only
+advisory fragment input. Public export, deterministic wrapping/assembly, and
+board loading remain separate operator responsibilities. Do not substitute a
+general-purpose agent or treat `tools: []` alone as an isolation proof.
+
+The `0.2.1` broad repository-reading profiles and their App launch procedure
+are **deprecated and unsupported**. The legacy assembler is not a tool-free
+specialist. No live App/automation validation is implied by this repair or its
+synthetic tests; earlier failed candidates remain failures.
+
+The separate experimental protocol-3 adapter in the
+[packet integration guide](docs/public-packet-review.md#experimental-protocol-3-state-only-observation)
+can only observe initialized native state. It cannot send a model request;
+catalog-only results leave model inventory unknown and review blocked.
 
 **Automated specialist reviewers remain blocked** whenever the effective runtime
 exposes mutation, shell, secrets, deployment, or cross-repository capabilities.

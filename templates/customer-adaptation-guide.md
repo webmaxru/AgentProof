@@ -62,18 +62,21 @@ installation. The kit contains no application to copy.
 
 ## 4. Set least privilege
 
-The current MVP uses manually started installed AgentProof reviewer sessions.
-Verify the plugin source/version and exact reviewer identity, and maintain the
-split:
+Version `0.3.0` uses operator-started
+[tool-free public-packet reviewers](../docs/public-packet-review.md), not the
+deprecated `0.2.1` repository-reading App path. Verify the host/plugin versions
+and exact reviewer identity, and maintain the split:
 
 - untrusted PR execution: no secrets and read-only;
 - trusted publisher: only required check/comment writes and no PR execution;
-- manual specialist reviewers: repository/PR/check/evidence read only, scoped
-  to one current full head SHA;
+- trusted packet host: same-repository native GETs, approved public synthetic
+  content, native tool exclusion and zero-tool/zero-call verification;
+- specialist reviewers: zero callable tools and only bounded public packet
+  input for one full head SHA;
 - no agent push, merge, approval, exception acceptance, secret access,
   deployment, or cross-repository access.
 
-A human controls publication and starts the Evidence Assembler. Preserve
+A human controls publication, deterministic assembly and board loading. Preserve
 `pass`, `fail`, `unknown`, and `exception` as distinct evidence states.
 
 The files in `templates/automations/` are gated experimental inputs, not live
@@ -112,8 +115,9 @@ authoritative approval. GitHub remains the system of record.
 
 Run on disposable/synthetic PRs first:
 
-- manually start each installed custom reviewer; do not substitute a default
-  agent for a missing AgentProof agent;
+- validate each Public Packet profile through the trusted native host; do not
+  substitute a default/legacy agent or mistake synthetic unit fixtures for
+  live execution proof;
 - red gate and missing independent review block separately;
 - unauthorized, malformed, stale, overlong, edited, deleted, and expired
   decisions remain blocking;

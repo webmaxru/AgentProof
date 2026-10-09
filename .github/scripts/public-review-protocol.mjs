@@ -1,0 +1,1273 @@
+import { lstat, mkdir, mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
+import { performance } from "node:perf_hooks";
+import { tmpdir } from "node:os";
+import { basename, dirname, isAbsolute, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { AgentProofError, sha256 } from "@agentproof/evidence-core";
+import {
+  MAX_REVIEW_REQUEST_BYTES,
+  PUBLIC_REVIEW_PROFILE_VERSION,
+  SUPPORTED_COPILOT_VERSION,
+  publicReviewerName,
+  requireNoGitAncestor,
+  validatePublicReviewerProfile,
+  zeroToolEnvironment,
+} from "./public-review-runtime.mjs";
+import {
+  MAX_PROTOCOL_BYTES,
+  PROTOCOL_DEADLINE_MS,
+  openProtocolTransport,
+} from "./public-review-protocol-transport.mjs";
+import { cleanupOwnedRuntime } from "./public-review-cleanup.mjs";
+import { createCredentialOwnerVerifier } from "./public-review-credential.mjs";
+
+export const PROTOCOL_STATE_ADAPTER = "experimental-protocol-3-state-only-v1";
+export const PROTOCOL_CONNECT_ADAPTER = "experimental-protocol-3-connect-diagnostics-v1";
+export const PROTOCOL_AUTH_ADAPTER = "experimental-protocol-3-auth-diagnostics-v1";
+export const PROTOCOL_CREDENTIAL_STATE_ADAPTER =
+  "experimental-protocol-3-credential-bound-state-v1";
+export const MAX_CONNECT_DIAGNOSTICS_BYTES = 4096;
+export const MAX_AUTH_DIAGNOSTICS_BYTES = 4096;
+export const MAX_SESSION_DIAGNOSTICS_BYTES = 4096;
+export const MAX_SESSION_CREATE_DIAGNOSTICS = 1;
+export const MAX_SESSION_START_DIAGNOSTICS = 2;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+const DIGEST = /^[0-9a-f]{64}$/u;
+const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}(Z|[+-]\d{2}:\d{2})$/u;
+const MCP_NAMES = ["github-mcp-server", "githubiq"];
+const TASK_KINDS = new Set(["agent", "shell", "client"]);
+const DOCUMENTED_AUTH_TYPES = new Set(["user", "env", "gh-cli", "hmac", "api-key", "token"]);
+const RUNTIME_ARGUMENTS = [
+  "--headless",
+  "--stdio",
+  "--no-auto-update",
+  "--no-auto-login",
+  "--log-level",
+  "none",
+  "--disable-builtin-mcps",
+  "--no-custom-instructions",
+  "--disallow-temp-dir",
+  "--no-ask-user",
+  "--no-remote",
+  "--no-remote-export",
+  "--available-tools",
+  "view",
+  "--excluded-tools",
+  "view",
+  "--deny-tool",
+  "shell",
+  "write",
+  "--secret-env-vars",
+  "COPILOT_GITHUB_TOKEN",
+  "--auth-token-env",
+  "COPILOT_GITHUB_TOKEN",
+];
+
+function requireState(condition, message) {
+  if (!condition) throw new AgentProofError("AP_REVIEW_PROTOCOL_STATE_REJECTED", message);
+}
+
+function object(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function exactKeys(value, required, optional = []) {
+  return (
+    object(value) &&
+    required.every((key) => Object.hasOwn(value, key)) &&
+    Object.keys(value).every((key) => required.includes(key) || optional.includes(key))
+  );
+}
+
+function empty(value) {
+  return Array.isArray(value) && value.length === 0;
+}
+
+function publishedTaskKinds(value) {
+  return Array.isArray(value) && value.every((kind) => TASK_KINDS.has(kind));
+}
+
+function diagnosticType(value) {
+  return value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
+}
+
+function projectedKeys(value, allowed) {
+  if (!object(value)) return { type: diagnosticType(value), keys: [], redactedKeyCount: 0 };
+  return {
+    type: "object",
+    keys: allowed
+      .filter((key) => Object.hasOwn(value, key))
+      .map((key) => ({ key, type: diagnosticType(value[key]) })),
+    redactedKeyCount: Object.keys(value).filter((key) => !allowed.includes(key)).length,
+  };
+}
+
+function requireSessionFingerprint(fingerprint) {
+  requireState(
+    exactKeys(fingerprint, ["rawResponseBytes", "rawResponseSha256"]) &&
+      Number.isSafeInteger(fingerprint.rawResponseBytes) &&
+      fingerprint.rawResponseBytes > 0 &&
+      fingerprint.rawResponseBytes <= MAX_PROTOCOL_BYTES &&
+      DIGEST.test(fingerprint.rawResponseSha256),
+    "Native session diagnostic fingerprint is invalid.",
+  );
+}
+
+function boundedSessionDiagnostic(projection) {
+  requireState(
+    object(projection) &&
+      Buffer.byteLength(JSON.stringify(projection)) <= MAX_SESSION_DIAGNOSTICS_BYTES,
+    "Native session diagnostics exceed their fixed safe bound.",
+  );
+  return projection;
+}
+
+export function retainSessionDiagnostic(receipt, kind, projection) {
+  const limits = {
+    sessionCreateDiagnostics: MAX_SESSION_CREATE_DIAGNOSTICS,
+    sessionStartDiagnostics: MAX_SESSION_START_DIAGNOSTICS,
+  };
+  requireState(
+    Object.hasOwn(limits, kind) &&
+      (!Object.hasOwn(receipt, kind) || Array.isArray(receipt[kind])) &&
+      (receipt[kind]?.length ?? 0) < limits[kind],
+    "Native session diagnostic storage exceeds its fixed count bound.",
+  );
+  const saved = JSON.parse(JSON.stringify(boundedSessionDiagnostic(projection)));
+  receipt[kind] ??= [];
+  receipt[kind].push(saved);
+  return saved;
+}
+
+export function projectSessionCreateResponse(message, fingerprint, expectedId, expectedSessionId) {
+  requireSessionFingerprint(fingerprint);
+  requireState(UUID.test(expectedSessionId), "Expected session diagnostic identity is invalid.");
+  const resultPresent = object(message) && Object.hasOwn(message, "result");
+  const errorPresent = object(message) && Object.hasOwn(message, "error");
+  const result = resultPresent ? message.result : undefined;
+  const present = object(result) && Object.hasOwn(result, "sessionId");
+  const predicates = {
+    envelope_object: object(message),
+    jsonrpc_2: object(message) && message.jsonrpc === "2.0",
+    matching_numeric_id:
+      object(message) && Number.isInteger(message.id) && message.id === expectedId,
+    response_keys: exactKeys(message, ["jsonrpc", "id"], ["result", "error"]),
+    result_without_error: resultPresent && !errorPresent,
+    result_shape: exactKeys(result, ["sessionId"], ["workspacePath", "capabilities"]),
+    exact_requested_session_id: object(result) && result.sessionId === expectedSessionId,
+  };
+  const errorKeys = projectedKeys(errorPresent ? message.error : undefined, [
+    "code",
+    "message",
+    "data",
+  ]);
+  errorKeys.keys = errorKeys.keys.filter(({ key }) => key === "code");
+  const projection = {
+    ...fingerprint,
+    resultPresent,
+    errorPresent,
+    envelope: projectedKeys(message, ["jsonrpc", "id", "result", "error"]),
+    result: projectedKeys(result, ["sessionId", "workspacePath", "capabilities"]),
+    error: errorKeys,
+    sessionId: {
+      present,
+      type: present ? diagnosticType(result.sessionId) : "missing",
+      valid: present && typeof result.sessionId === "string" && UUID.test(result.sessionId),
+      exactExpectedMatch: predicates.exact_requested_session_id,
+    },
+    missingResultKeys: present ? [] : ["sessionId"],
+    predicates,
+    failedPredicates: Object.keys(predicates).filter((key) => !predicates[key]),
+  };
+  if (
+    errorPresent &&
+    Number.isSafeInteger(message.error?.code) &&
+    Math.abs(message.error.code) <= 2147483647
+  )
+    projection.errorCode = message.error.code;
+  return boundedSessionDiagnostic(projection);
+}
+
+const SESSION_START_PREDICATES = [
+  "notification_session_id",
+  "event_parameters",
+  "event_shape",
+  "event_id_valid",
+  "event_id_unseen",
+  "event_timestamp_format",
+  "event_not_before_observation",
+  "event_not_future",
+  "parent_id_valid",
+  "ephemeral_boolean",
+  "no_agent_id",
+  "data_object",
+  "no_user_events",
+  "no_model_events",
+  "no_tool_permission_events",
+  "single_start",
+  "data_session_id",
+  "root_parent_null",
+  "pinned_start_version",
+  "producer_string",
+  "schema_version_integer",
+  "start_timestamp_format",
+  "start_not_before_observation",
+  "start_not_future",
+  "not_already_in_use",
+  "not_remote_steerable",
+  "no_detached_parent",
+];
+
+export function createSessionStartDiagnostic(params, fingerprint) {
+  requireSessionFingerprint(fingerprint);
+  const event = object(params) ? params.event : undefined;
+  const data = object(event) ? event.data : undefined;
+  const requiredData = ["sessionId", "copilotVersion", "producer", "version", "startTime"];
+  const fields = {
+    ...fingerprint,
+    notification: projectedKeys(params, ["sessionId", "event"]),
+    event: projectedKeys(event, [
+      "id",
+      "parentId",
+      "timestamp",
+      "type",
+      "data",
+      "ephemeral",
+      "agentId",
+    ]),
+    data: projectedKeys(data, [
+      ...requiredData,
+      "alreadyInUse",
+      "remoteSteerable",
+      "detachedFromSpawningParentSessionId",
+    ]),
+    missingDataKeys: requiredData.filter((key) => !object(data) || !Object.hasOwn(data, key)),
+  };
+  const predicates = {};
+  return {
+    check(key, value) {
+      requireState(
+        SESSION_START_PREDICATES.includes(key) &&
+          !Object.hasOwn(predicates, key) &&
+          typeof value === "boolean",
+        "Native session-start diagnostic predicate is invalid.",
+      );
+      predicates[key] = value;
+      return value;
+    },
+    snapshot(fullyValidated) {
+      requireState(
+        typeof fullyValidated === "boolean" &&
+          (!fullyValidated || SESSION_START_PREDICATES.every((key) => predicates[key] === true)),
+        "Native session-start diagnostic validation state is invalid.",
+      );
+      return boundedSessionDiagnostic({
+        ...fields,
+        predicates: { ...predicates },
+        failedPredicates: SESSION_START_PREDICATES.filter((key) => predicates[key] === false),
+        notEvaluatedPredicates: SESSION_START_PREDICATES.filter(
+          (key) => !Object.hasOwn(predicates, key),
+        ),
+        fullyValidated,
+      });
+    },
+  };
+}
+
+function failureProvenance(receipt) {
+  const first = receipt.native?.firstFailure;
+  if (!first && !receipt.hostRejection) return;
+  const projection =
+    first?.origin === "session-start-notification"
+      ? receipt.sessionStartDiagnostics?.find(
+          (value) =>
+            !value.fullyValidated &&
+            value.rawResponseSha256 === first.rawResponseSha256 &&
+            value.rawResponseBytes === first.rawResponseBytes,
+        )
+      : undefined;
+  receipt.failureProvenance = boundedSessionDiagnostic({
+    ...(first
+      ? {
+          firstTransport: {
+            ...first,
+            errorCode: receipt.native.errorCode,
+            predicateEvidence: projection ? "observed" : "unavailable",
+            ...(projection
+              ? {
+                  failedPredicates: projection.failedPredicates,
+                  notEvaluatedPredicates: projection.notEvaluatedPredicates,
+                }
+              : {}),
+          },
+        }
+      : {}),
+    ...(receipt.hostRejection ? { hostRejection: receipt.hostRejection } : {}),
+    crossOriginChronology: "not-recorded",
+  });
+}
+
+export function projectConnectResponse(message, fingerprint, expectedId) {
+  requireState(
+    exactKeys(fingerprint, ["rawResponseBytes", "rawResponseSha256"]) &&
+      Number.isSafeInteger(fingerprint.rawResponseBytes) &&
+      fingerprint.rawResponseBytes > 0 &&
+      fingerprint.rawResponseBytes <= MAX_PROTOCOL_BYTES &&
+      DIGEST.test(fingerprint.rawResponseSha256),
+    "Native connect response fingerprint is invalid.",
+  );
+  const resultPresent = object(message) && Object.hasOwn(message, "result");
+  const errorPresent = object(message) && Object.hasOwn(message, "error");
+  const result = resultPresent ? message.result : undefined;
+  const resultObject = object(result);
+  const taskKindsPresent = resultObject && Object.hasOwn(result, "taskKinds");
+  const predicates = {
+    envelope_object: object(message),
+    jsonrpc_2: object(message) && message.jsonrpc === "2.0",
+    matching_numeric_id:
+      object(message) && Number.isInteger(message.id) && message.id === expectedId,
+    response_keys: exactKeys(message, ["jsonrpc", "id"], ["result", "error"]),
+    result_without_error: resultPresent && !errorPresent,
+    result_shape: exactKeys(result, ["ok", "protocolVersion", "version"], ["taskKinds"]),
+    ok_true: resultObject && result.ok === true,
+    protocol_version_3: resultObject && result.protocolVersion === 3,
+    pinned_cli_version: resultObject && result.version === SUPPORTED_COPILOT_VERSION,
+    task_kinds_published_type:
+      resultObject && (!taskKindsPresent || publishedTaskKinds(result.taskKinds)),
+  };
+  const projection = {
+    ...fingerprint,
+    resultPresent,
+    errorPresent,
+    envelope: projectedKeys(message, ["jsonrpc", "id", "result", "error"]),
+    result: projectedKeys(result, ["ok", "protocolVersion", "version", "taskKinds"]),
+    error: projectedKeys(errorPresent ? message.error : undefined, ["code", "message", "data"]),
+    predicates,
+    failedPredicates: Object.keys(predicates).filter((key) => !predicates[key]),
+    missingResultKeys: ["ok", "protocolVersion", "version"].filter(
+      (key) => !resultObject || !Object.hasOwn(result, key),
+    ),
+    pinnedVersionMatches: predicates.pinned_cli_version,
+    taskKinds: {
+      present: taskKindsPresent,
+      type: taskKindsPresent ? diagnosticType(result.taskKinds) : "missing",
+    },
+  };
+  if (
+    resultObject &&
+    typeof result.protocolVersion === "number" &&
+    Number.isFinite(result.protocolVersion) &&
+    Math.abs(result.protocolVersion) <= 2147483647
+  ) {
+    projection.protocolVersion = result.protocolVersion;
+  }
+  // Numeric CLI versions only: arbitrary prerelease/build strings may contain private data.
+  if (
+    resultObject &&
+    typeof result.version === "string" &&
+    /^(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,5})(?:-(0|[1-9][0-9]{0,3}))?$/u.test(
+      result.version,
+    )
+  ) {
+    projection.version = result.version;
+  }
+  if (taskKindsPresent && Array.isArray(result.taskKinds))
+    projection.taskKinds.count = result.taskKinds.length;
+  if (
+    errorPresent &&
+    Number.isSafeInteger(message.error?.code) &&
+    Math.abs(message.error.code) <= 2147483647
+  )
+    projection.errorCode = message.error.code;
+  requireState(
+    Buffer.byteLength(JSON.stringify(projection)) <= MAX_CONNECT_DIAGNOSTICS_BYTES,
+    "Native connect diagnostics exceed their fixed safe bound.",
+  );
+  return projection;
+}
+
+function verifyAuth(value, expectedLogin) {
+  requireState(
+    exactKeys(value, ["isAuthenticated", "login", "host", "authType"], ["statusMessage"]) &&
+      value.isAuthenticated === true &&
+      value.login === expectedLogin &&
+      ["github.com", "https://github.com"].includes(value.host) &&
+      ["env", "token"].includes(value.authType),
+    "Native authentication must explicitly match the expected GitHub identity and explicit credential source.",
+  );
+  return { login: value.login, host: value.host, authType: value.authType };
+}
+
+function verifyCredentialBoundAuth(value, expectedLogin) {
+  requireState(
+    exactKeys(value, ["isAuthenticated", "host", "authType"], ["login", "statusMessage"]) &&
+      value.isAuthenticated === true &&
+      ["github.com", "https://github.com"].includes(value.host) &&
+      ["env", "token"].includes(value.authType) &&
+      (!Object.hasOwn(value, "login") || value.login === expectedLogin),
+    "Credential-bound state requires native authentication, allowed host/source, and no invalid or mismatched native login.",
+  );
+}
+
+export function projectAuthResponse(message, fingerprint, expectedId, expectedLogin) {
+  requireState(
+    exactKeys(fingerprint, ["rawResponseBytes", "rawResponseSha256"]) &&
+      Number.isSafeInteger(fingerprint.rawResponseBytes) &&
+      fingerprint.rawResponseBytes > 0 &&
+      fingerprint.rawResponseBytes <= MAX_PROTOCOL_BYTES &&
+      DIGEST.test(fingerprint.rawResponseSha256) &&
+      typeof expectedLogin === "string" &&
+      /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/u.test(expectedLogin),
+    "Native authentication response fingerprint or expected identity is invalid.",
+  );
+  const resultPresent = object(message) && Object.hasOwn(message, "result");
+  const errorPresent = object(message) && Object.hasOwn(message, "error");
+  const result = resultPresent ? message.result : undefined;
+  const required = ["isAuthenticated", "login", "host", "authType"];
+  const present = (key) => object(result) && Object.hasOwn(result, key);
+  const field = (key) => ({
+    present: present(key),
+    type: present(key) ? diagnosticType(result[key]) : "missing",
+  });
+  const predicates = {
+    envelope_object: object(message),
+    jsonrpc_2: object(message) && message.jsonrpc === "2.0",
+    matching_numeric_id:
+      object(message) && Number.isInteger(message.id) && message.id === expectedId,
+    response_keys: exactKeys(message, ["jsonrpc", "id"], ["result", "error"]),
+    result_without_error: resultPresent && !errorPresent,
+    result_shape: exactKeys(result, required, ["statusMessage"]),
+    authenticated_true: object(result) && result.isAuthenticated === true,
+    exact_expected_login: object(result) && result.login === expectedLogin,
+    allowed_public_host:
+      object(result) && ["github.com", "https://github.com"].includes(result.host),
+    allowed_credential_source: object(result) && ["env", "token"].includes(result.authType),
+  };
+  const resultKeys = projectedKeys(result, [...required, "statusMessage"]);
+  resultKeys.keys = resultKeys.keys.filter(({ key }) => key !== "statusMessage");
+  const errorKeys = projectedKeys(errorPresent ? message.error : undefined, [
+    "code",
+    "message",
+    "data",
+  ]);
+  errorKeys.keys = errorKeys.keys.filter(({ key }) => key === "code");
+  const projection = {
+    ...fingerprint,
+    resultPresent,
+    errorPresent,
+    envelope: projectedKeys(message, ["jsonrpc", "id", "result", "error"]),
+    result: resultKeys,
+    error: errorKeys,
+    authentication: field("isAuthenticated"),
+    login: { ...field("login"), exactExpectedMatch: predicates.exact_expected_login },
+    host: { ...field("host"), allowedPublicHostMatch: predicates.allowed_public_host },
+    authType: {
+      ...field("authType"),
+      allowedSetMatch: predicates.allowed_credential_source,
+      documentedSetAvailable: true,
+      documentedSetMatch: object(result) && DOCUMENTED_AUTH_TYPES.has(result.authType),
+    },
+    documentedRequiredKeys: ["isAuthenticated"],
+    missingDocumentedRequiredKeys: ["isAuthenticated"].filter((key) => !present(key)),
+    missingResultKeys: required.filter((key) => !present(key)),
+    predicates,
+    failedPredicates: Object.keys(predicates).filter((key) => !predicates[key]),
+  };
+  if (present("isAuthenticated") && typeof result.isAuthenticated === "boolean")
+    projection.isAuthenticated = result.isAuthenticated;
+  if (
+    errorPresent &&
+    Number.isSafeInteger(message.error?.code) &&
+    Math.abs(message.error.code) <= 2147483647
+  )
+    projection.errorCode = message.error.code;
+  requireState(
+    Buffer.byteLength(JSON.stringify(projection)) <= MAX_AUTH_DIAGNOSTICS_BYTES,
+    "Native authentication diagnostics exceed their fixed safe bound.",
+  );
+  return projection;
+}
+
+function disabledExtensions(value) {
+  requireState(
+    exactKeys(value, ["extensions"]) && Array.isArray(value.extensions),
+    "Native extension discovery response is missing or unsupported.",
+  );
+  return value.extensions.map((extension) => {
+    requireState(
+      exactKeys(extension, ["id", "name", "source", "status"], ["pid"]) &&
+        typeof extension.id === "string" &&
+        typeof extension.name === "string" &&
+        ["project", "user", "plugin", "session"].includes(extension.source) &&
+        extension.status === "disabled" &&
+        !Object.hasOwn(extension, "pid"),
+      "Every discovered extension must be explicitly disabled, without a running process.",
+    );
+    return { idSha256: sha256(extension.id), status: extension.status, source: extension.source };
+  });
+}
+
+function disabledServers(servers, event = false) {
+  requireState(Array.isArray(servers), "Native MCP server status entries are missing.");
+  const names = new Set();
+  return servers
+    .map((server) => {
+      requireState(
+        exactKeys(
+          server,
+          ["name", "status"],
+          event
+            ? [
+                "source",
+                "displayName",
+                "pluginName",
+                "pluginVersion",
+                "serverMetadata",
+                "transport",
+              ]
+            : [
+                "source",
+                "displayName",
+                "sourcePlugin",
+                "sourcePluginVersion",
+                "serverMetadata",
+                "owned",
+              ],
+        ) &&
+          MCP_NAMES.includes(server.name) &&
+          !names.has(server.name) &&
+          server.status === "disabled" &&
+          !Object.hasOwn(server, "error"),
+        "Native MCP entries must be known, distinct, and explicitly disabled.",
+      );
+      names.add(server.name);
+      return { name: server.name, status: server.status };
+    })
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function verifyMcp(value) {
+  requireState(
+    exactKeys(value, ["servers", "host"]),
+    "Native initialized MCP host state is missing.",
+  );
+  const servers = disabledServers(value.servers);
+  const host = value.host;
+  requireState(
+    exactKeys(host, [
+      "mcp3pEnabled",
+      "disabledServers",
+      "filteredServers",
+      "clients",
+      "pendingConnections",
+      "failedServers",
+      "needsAuthServers",
+    ]) &&
+      typeof host.mcp3pEnabled === "boolean" &&
+      Array.isArray(host.disabledServers) &&
+      JSON.stringify([...host.disabledServers].sort()) ===
+        JSON.stringify(servers.map((server) => server.name).sort()) &&
+      empty(host.filteredServers) &&
+      empty(host.clients) &&
+      empty(host.pendingConnections) &&
+      exactKeys(host.failedServers, []) &&
+      exactKeys(host.needsAuthServers, []),
+    "Native MCP host is incomplete, active, pending, failed, or awaiting authentication.",
+  );
+  return servers;
+}
+
+function publicAgentIdentity(agent, profile) {
+  requireState(
+    exactKeys(
+      agent,
+      ["id", "name", "displayName", "description", "tools"],
+      [
+        "path",
+        "source",
+        "userInvocable",
+        "disableModelInvocation",
+        "model",
+        "models",
+        "modelPolicy",
+        "reasoningEffort",
+        "mcpServers",
+        "skills",
+        "prompt",
+      ],
+    ) &&
+      agent.id === profile.name &&
+      agent.name === profile.name &&
+      agent.displayName === profile.name &&
+      agent.description === profile.description &&
+      empty(agent.tools) &&
+      (!Object.hasOwn(agent, "disableModelInvocation") || agent.disableModelInvocation === true) &&
+      (!Object.hasOwn(agent, "userInvocable") || agent.userInvocable === true) &&
+      (!Object.hasOwn(agent, "skills") || empty(agent.skills)) &&
+      (!Object.hasOwn(agent, "mcpServers") || exactKeys(agent.mcpServers, [])) &&
+      !["model", "models", "reasoningEffort", "modelPolicy"].some((key) =>
+        Object.hasOwn(agent, key),
+      ),
+    "Native selected profile identity or its explicit authored tool list differs.",
+  );
+}
+
+function observeNotifications(sessionId, expectedName, receipt) {
+  const seen = new Set();
+  const earliest = Date.now();
+  const counts = {
+    sessionStarts: 0,
+    selectedEvents: 0,
+    userMessages: 0,
+    modelEvents: 0,
+    toolOrPermissionEvents: 0,
+    observedSessionStarts: 0,
+    fullyValidatedSessionStarts: 0,
+  };
+  function validateNotification(method, params, check) {
+    requireState(
+      check("notification_session_id", params.sessionId === sessionId),
+      "Native notification belongs to another session.",
+    );
+    if (method === "session.lifecycle") {
+      requireState(
+        exactKeys(params, ["sessionId", "type"], ["metadata"]) &&
+          ["session.created", "session.updated", "session.deleted"].includes(params.type),
+        "Native lifecycle notification is unsupported or describes a resumed session.",
+      );
+      if (params.type !== "session.deleted") {
+        requireState(
+          exactKeys(params.metadata, ["startTime", "modifiedTime"], ["summary"]) &&
+            TIMESTAMP.test(params.metadata.startTime) &&
+            TIMESTAMP.test(params.metadata.modifiedTime),
+          "Native lifecycle metadata is missing or malformed.",
+        );
+      } else {
+        requireState(
+          !Object.hasOwn(params, "metadata"),
+          "Deleted native session has unexpected lifecycle metadata.",
+        );
+      }
+      return;
+    }
+    const event = params.event;
+    requireState(
+      check("event_parameters", exactKeys(params, ["sessionId", "event"])) &&
+        check(
+          "event_shape",
+          exactKeys(
+            event,
+            ["id", "parentId", "timestamp", "type", "data"],
+            ["ephemeral", "agentId"],
+          ),
+        ) &&
+        check("event_id_valid", UUID.test(event.id)) &&
+        check("event_id_unseen", !seen.has(event.id)) &&
+        check("event_timestamp_format", TIMESTAMP.test(event.timestamp)) &&
+        check("event_not_before_observation", Date.parse(event.timestamp) >= earliest) &&
+        check("event_not_future", Date.parse(event.timestamp) <= Date.now()) &&
+        check("parent_id_valid", event.parentId === null || UUID.test(event.parentId)) &&
+        check(
+          "ephemeral_boolean",
+          !Object.hasOwn(event, "ephemeral") || typeof event.ephemeral === "boolean",
+        ) &&
+        check("no_agent_id", !Object.hasOwn(event, "agentId")) &&
+        check("data_object", object(event.data)),
+      "Native session event identity, timestamp, ownership, or envelope is invalid.",
+    );
+    seen.add(event.id);
+    const { type, data } = event;
+    if (type === "user.message") counts.userMessages++;
+    if (/^(assistant|model)\./u.test(type)) counts.modelEvents++;
+    if (/^(tool|permission|hook|elicitation)\./u.test(type)) counts.toolOrPermissionEvents++;
+    requireState(
+      check("no_user_events", counts.userMessages === 0) &&
+        check("no_model_events", counts.modelEvents === 0) &&
+        check("no_tool_permission_events", counts.toolOrPermissionEvents === 0),
+      "State-only observation forbids every user message, model response, refusal, tool, permission, or hook event.",
+    );
+    switch (type) {
+      case "session.start":
+        requireState(
+          check("single_start", ++counts.sessionStarts === 1) &&
+            check("data_session_id", data.sessionId === sessionId) &&
+            check("root_parent_null", event.parentId === null) &&
+            check("pinned_start_version", data.copilotVersion === SUPPORTED_COPILOT_VERSION) &&
+            check("producer_string", typeof data.producer === "string") &&
+            check("schema_version_integer", Number.isInteger(data.version)) &&
+            check("start_timestamp_format", TIMESTAMP.test(data.startTime)) &&
+            check("start_not_before_observation", Date.parse(data.startTime) >= earliest) &&
+            check("start_not_future", Date.parse(data.startTime) <= Date.now()) &&
+            check(
+              "not_already_in_use",
+              !Object.hasOwn(data, "alreadyInUse") || data.alreadyInUse === false,
+            ) &&
+            check(
+              "not_remote_steerable",
+              !Object.hasOwn(data, "remoteSteerable") || data.remoteSteerable === false,
+            ) &&
+            check(
+              "no_detached_parent",
+              !Object.hasOwn(data, "detachedFromSpawningParentSessionId"),
+            ),
+          "Native session start differs or is not a fresh local session.",
+        );
+        counts.sessionStartedAt = data.startTime;
+        counts.sessionStartEventAt = event.timestamp;
+        counts.fullyValidatedSessionStarts++;
+        break;
+      case "subagent.selected":
+        requireState(
+          exactKeys(data, ["agentName", "agentDisplayName", "tools"]) &&
+            data.agentName === expectedName &&
+            data.agentDisplayName === expectedName &&
+            empty(data.tools),
+          "Native selection event differs from the pinned public profile.",
+        );
+        counts.selectedEvents++;
+        break;
+      case "session.extensions_loaded":
+        requireState(event.ephemeral === true, "Native extension event must be ephemeral.");
+        disabledExtensions(data);
+        break;
+      case "session.mcp_servers_loaded":
+        requireState(
+          event.ephemeral === true && exactKeys(data, ["servers"]),
+          "Native MCP initialization event is malformed.",
+        );
+        disabledServers(data.servers, true);
+        break;
+      case "session.skills_loaded":
+        requireState(
+          event.ephemeral === true && exactKeys(data, ["skills"]) && empty(data.skills),
+          "Native runtime loaded skills in state-only mode.",
+        );
+        break;
+      case "session.tools_updated":
+        requireState(
+          exactKeys(data, ["model"]) && typeof data.model === "string",
+          "Native tool-update schema is unsupported.",
+        );
+        break;
+      case "session.info":
+        requireState(
+          exactKeys(data, ["infoType", "message"], ["tip", "url"]) &&
+            typeof data.infoType === "string" &&
+            typeof data.message === "string",
+          "Native informational event is malformed.",
+        );
+        break;
+      case "session.usage_checkpoint":
+        // Internal cache baselines are not a public model-inventory contract.
+        requireState(
+          exactKeys(
+            data,
+            ["totalNanoAiu"],
+            ["modelCacheState", "promptCacheBreakState", "totalPremiumRequests"],
+          ) &&
+            data.totalNanoAiu === 0 &&
+            (!Object.hasOwn(data, "totalPremiumRequests") || data.totalPremiumRequests === 0) &&
+            (!Object.hasOwn(data, "modelCacheState") || empty(data.modelCacheState)) &&
+            (!Object.hasOwn(data, "promptCacheBreakState") || empty(data.promptCacheBreakState)),
+          "State-only usage must be zero with no populated or unsupported internal cache baseline.",
+        );
+        break;
+      default:
+        requireState(false, "Native event type is unsupported in state-only observation.");
+    }
+  }
+  return {
+    counts,
+    receive(method, params, fingerprint) {
+      const isStart =
+        method === "session.event" && object(params.event) && params.event.type === "session.start";
+      const diagnostic = isStart ? createSessionStartDiagnostic(params, fingerprint) : undefined;
+      if (isStart) counts.observedSessionStarts++;
+      const validatedBefore = counts.fullyValidatedSessionStarts;
+      try {
+        validateNotification(method, params, (key, value) =>
+          diagnostic ? diagnostic.check(key, value) : value,
+        );
+      } finally {
+        if (diagnostic) {
+          retainSessionDiagnostic(
+            receipt,
+            "sessionStartDiagnostics",
+            diagnostic.snapshot(counts.fullyValidatedSessionStarts > validatedBefore),
+          );
+        }
+      }
+    },
+  };
+}
+
+function sessionConfiguration(sessionId, profile, body, workspace, home) {
+  return {
+    sessionId,
+    clientName: "AgentProof protocol-3 state-only",
+    isExperimentalMode: false,
+    tools: [],
+    availableTools: [],
+    excludedTools: ["builtin:*", "mcp:*", "custom:*"],
+    toolFilterPrecedence: "excluded",
+    systemMessage: { mode: "customize", sections: { environment_context: { action: "remove" } } },
+    requestPermission: true,
+    requestUserInput: false,
+    requestElicitation: false,
+    requestExitPlanMode: false,
+    requestAutoModeSwitch: false,
+    requestExtensions: false,
+    hooks: false,
+    workingDirectory: workspace,
+    additionalDirectories: [],
+    streaming: false,
+    includeSubAgentStreamingEvents: true,
+    mcpServers: {},
+    disabledMcpServers: [...MCP_NAMES],
+    mcpOAuthTokenStorage: "in-memory",
+    envValueMode: "direct",
+    customAgents: [
+      {
+        name: profile.name,
+        displayName: profile.name,
+        description: profile.description,
+        prompt: body,
+        tools: [],
+        infer: false,
+        skills: [],
+        mcpServers: {},
+      },
+    ],
+    customAgentsLocalOnly: true,
+    agent: profile.name,
+    configDir: home,
+    enableConfigDiscovery: false,
+    refreshCustomInstructions: false,
+    skipEmbeddingRetrieval: true,
+    embeddingCacheStorage: "in-memory",
+    enableOnDemandInstructionDiscovery: false,
+    enableFileHooks: false,
+    enableHostGitOperations: false,
+    enableSessionStore: false,
+    enableSkills: false,
+    enableSessionTelemetry: false,
+    skillDirectories: [],
+    pluginDirectories: [],
+    instructionDirectories: [],
+    infiniteSessions: { enabled: false },
+    memory: { enabled: false },
+    remoteSession: "off",
+  };
+}
+
+async function readState(transport, sessionId, profile, body, receipt) {
+  const name = profile.name;
+  const call = (method, params = {}) => transport.request(method, { sessionId, ...params });
+  const current = await call("session.agent.getCurrent");
+  requireState(exactKeys(current, ["agent"]), "Native selected-agent response is missing.");
+  publicAgentIdentity(current.agent, profile);
+  const listed = await call("session.agent.list", {
+    includeBuiltInAgents: false,
+    includePrompt: true,
+  });
+  requireState(
+    exactKeys(listed, ["agents"]) && Array.isArray(listed.agents) && listed.agents.length === 1,
+    "Native authored-agent listing must identify exactly the staged public profile.",
+  );
+  publicAgentIdentity(listed.agents[0], profile);
+  requireState(
+    typeof listed.agents[0].prompt === "string" && sha256(listed.agents[0].prompt) === sha256(body),
+    "Native public authored-profile bytes are missing or differ from the pinned profile.",
+  );
+  if (Object.hasOwn(current.agent, "prompt")) {
+    requireState(
+      typeof current.agent.prompt === "string" && sha256(current.agent.prompt) === sha256(body),
+      "Native selected-profile authored bytes differ.",
+    );
+  }
+  const extensions = disabledExtensions(await call("session.extensions.list"));
+  const mcp = await call("session.mcp.list");
+  if (object(mcp) && Array.isArray(mcp.servers)) {
+    receipt.observedDisabledMcpServers = disabledServers(mcp.servers);
+  }
+  const mcpServers = verifyMcp(mcp);
+  const catalog = await call("session.tools.getCurrentMetadata");
+  requireState(
+    exactKeys(catalog, ["tools"]) && empty(catalog.tools),
+    "Native tool catalog must be explicitly initialized and empty; null or missing is not zero.",
+  );
+  const skills = await call("session.skills.list");
+  requireState(
+    exactKeys(skills, ["skills"]) && empty(skills.skills),
+    "Native skill state is missing or nonempty.",
+  );
+  return {
+    selectedProfile: {
+      id: current.agent.id,
+      name,
+      authoredTools: [],
+      authoredPromptSha256: sha256(body),
+    },
+    extensions,
+    mcpServers,
+    initializedToolCatalog: [],
+    skills: [],
+  };
+}
+
+export function observeCopilotProtocol3State(options, dependencies) {
+  return observeCopilotProtocol3(options, dependencies, false);
+}
+
+export function observeCopilotProtocol3Connect(options, dependencies) {
+  return observeCopilotProtocol3(options, dependencies, true);
+}
+
+export function observeCopilotProtocol3Auth(options, dependencies) {
+  return observeCopilotProtocol3(options, dependencies, false, true);
+}
+
+export function observeCopilotProtocol3CredentialBoundState(options, dependencies) {
+  return observeCopilotProtocol3(options, dependencies, false, false, true);
+}
+
+async function observeCopilotProtocol3(
+  options,
+  {
+    spawnNative,
+    temporaryParent = tmpdir(),
+    inheritedEnvironment = process.env,
+    timeoutMs,
+    requestCredentialOwner,
+  } = {},
+  connectOnly,
+  authOnly = false,
+  credentialBound = false,
+) {
+  const setupDeadline = performance.now() + PROTOCOL_DEADLINE_MS;
+  requireState(
+    exactKeys(options, [
+      "executable",
+      "executableSha256",
+      "profileSha256",
+      "captureDirectory",
+      "specialist",
+      "sessionId",
+      "expectedLogin",
+    ]) &&
+      isAbsolute(options.executable) &&
+      isAbsolute(options.captureDirectory) &&
+      DIGEST.test(options.executableSha256) &&
+      DIGEST.test(options.profileSha256) &&
+      UUID.test(options.sessionId) &&
+      /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/u.test(options.expectedLogin),
+    "State-only options must pin the runtime/profile/identity and contain no review input or overrides.",
+  );
+  const name = publicReviewerName(options.specialist);
+  const executable = await realpath(options.executable);
+  const source = await readFile(
+    fileURLToPath(
+      new URL(`../agents/agentproof-${options.specialist}-reviewer.agent.md`, import.meta.url),
+    ),
+    "utf8",
+  );
+  requireState(
+    Buffer.byteLength(source) <= MAX_REVIEW_REQUEST_BYTES &&
+      sha256(source) === options.profileSha256 &&
+      sha256(await readFile(executable)) === options.executableSha256,
+    "Pinned public profile or native executable bytes differ.",
+  );
+  const profile = validatePublicReviewerProfile(source, options.specialist);
+  const body = source.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/u, "");
+  const captureDirectory = join(
+    await requireNoGitAncestor(dirname(options.captureDirectory)),
+    basename(options.captureDirectory),
+  );
+  await mkdir(captureDirectory, { mode: 0o700 });
+  const receipt = {
+    adapter: connectOnly
+      ? PROTOCOL_CONNECT_ADAPTER
+      : authOnly
+        ? PROTOCOL_AUTH_ADAPTER
+        : credentialBound
+          ? PROTOCOL_CREDENTIAL_STATE_ADAPTER
+          : PROTOCOL_STATE_ADAPTER,
+    profileVersion: PUBLIC_REVIEW_PROFILE_VERSION,
+    profileSha256: options.profileSha256,
+    executableSha256: options.executableSha256,
+    ...(connectOnly
+      ? { attemptId: options.sessionId, connectOnly: true }
+      : authOnly
+        ? { attemptId: options.sessionId, authOnly: true }
+        : { requestedSessionId: options.sessionId }),
+    status: "blocked",
+    stateOnly: true,
+    modelInventoryStatus: "unknown",
+    reviewStatus: "blocked",
+    ...(credentialBound ? { credentialBoundIdentity: true } : {}),
+  };
+  let runtimeRoot;
+  let runtimeIdentity;
+  let transport;
+  let failure;
+  try {
+    runtimeRoot = await mkdtemp(
+      join(await requireNoGitAncestor(temporaryParent), "agentproof-protocol-state-"),
+    );
+    const identity = await lstat(runtimeRoot, { bigint: true });
+    runtimeIdentity = {
+      path: await realpath(runtimeRoot),
+      dev: identity.dev.toString(),
+      ino: identity.ino.toString(),
+    };
+    const home = join(runtimeRoot, "home");
+    const workspace = join(runtimeRoot, "workspace");
+    await mkdir(home, { mode: 0o700 });
+    await mkdir(join(workspace, ".github", "agents"), { recursive: true });
+    const physicalWorkspace = await requireNoGitAncestor(workspace);
+    const localProfile = join(physicalWorkspace, ".github", "agents", "public-reviewer.agent.md");
+    await writeFile(localProfile, source, { flag: "wx", mode: 0o600 });
+    const env = { ...zeroToolEnvironment(home, inheritedEnvironment), COPILOT_DISABLE_KEYTAR: "1" };
+    requireState(
+      typeof env.COPILOT_GITHUB_TOKEN === "string" && env.COPILOT_GITHUB_TOKEN.trim().length > 0,
+      "Trusted launcher must supply explicit native authentication; no login fallback is permitted.",
+    );
+    const verifyCredentialOwner = credentialBound
+      ? createCredentialOwnerVerifier(env, options.expectedLogin, requestCredentialOwner)
+      : undefined;
+    let nativeTimeout = timeoutMs;
+    if (credentialBound) {
+      requireState(
+        timeoutMs === undefined ||
+          (Number.isInteger(timeoutMs) && timeoutMs >= 1 && timeoutMs <= PROTOCOL_DEADLINE_MS),
+        "Credential-bound state must retain the existing native deadline bound.",
+      );
+      nativeTimeout = Math.floor(
+        Math.min(timeoutMs ?? PROTOCOL_DEADLINE_MS, setupDeadline - performance.now()),
+      );
+      requireState(nativeTimeout >= 1, "Credential-bound state setup exhausted its deadline.");
+    }
+    const observer = observeNotifications(options.sessionId, name, receipt);
+    receipt.events = observer.counts;
+    transport = openProtocolTransport(
+      {
+        executable,
+        args: [...RUNTIME_ARGUMENTS],
+        cwd: physicalWorkspace,
+        env,
+        onNotification: observer.receive,
+        onConnectResponse: (message, fingerprint, expectedId) => {
+          receipt.connect = projectConnectResponse(message, fingerprint, expectedId);
+        },
+        onSessionCreateResponse: (message, fingerprint, expectedId) => {
+          retainSessionDiagnostic(
+            receipt,
+            "sessionCreateDiagnostics",
+            projectSessionCreateResponse(message, fingerprint, expectedId, options.sessionId),
+          );
+        },
+        onAuthResponse:
+          authOnly || credentialBound
+            ? (message, fingerprint, expectedId) => {
+                const projection = projectAuthResponse(
+                  message,
+                  fingerprint,
+                  expectedId,
+                  options.expectedLogin,
+                );
+                if (authOnly) receipt.authStatus = projection;
+                else {
+                  receipt.nativeAuthentication ??= [];
+                  requireState(
+                    receipt.nativeAuthentication.length < 2,
+                    "Credential-bound state cannot repeat native authentication observations.",
+                  );
+                  receipt.nativeAuthentication.push(projection);
+                }
+              }
+            : undefined,
+        connectOnly,
+        authOnly,
+        timeoutMs: nativeTimeout,
+      },
+      spawnNative,
+    );
+    const connected = await transport.request("connect", {
+      enableGitHubTelemetryForwarding: false,
+      supportedTaskKinds: [],
+    });
+    requireState(
+      exactKeys(connected, ["ok", "protocolVersion", "version"], ["taskKinds"]) &&
+        connected.ok === true &&
+        connected.protocolVersion === 3 &&
+        connected.version === SUPPORTED_COPILOT_VERSION &&
+        (!Object.hasOwn(connected, "taskKinds") || publishedTaskKinds(connected.taskKinds)),
+      "Native connect must confirm protocol 3 and the exact pinned version; no downgrade is permitted.",
+    );
+    let observedState;
+    if (!connectOnly) {
+      const status = await transport.request("status.get", {});
+      requireState(
+        exactKeys(status, ["version", "protocolVersion"]) &&
+          status.version === SUPPORTED_COPILOT_VERSION &&
+          status.protocolVersion === 3,
+        "Native status differs from the pinned protocol/version.",
+      );
+      receipt.cliVersion = status.version;
+      const nativeAuthentication = await transport.request("auth.getStatus", {});
+      let authentication;
+      if (credentialBound) {
+        verifyCredentialBoundAuth(nativeAuthentication, options.expectedLogin);
+        if (transport.error) throw transport.error;
+        receipt.credentialOwner = {
+          ...(await verifyCredentialOwner(() =>
+            Math.min(
+              transport.remainingMilliseconds(),
+              Math.max(0, setupDeadline - performance.now()),
+            ),
+          )),
+          tokenBinding: "same-immutable-environment-forwarded-to-owned-cli",
+        };
+        if (transport.error) throw transport.error;
+      } else authentication = verifyAuth(nativeAuthentication, options.expectedLogin);
+      if (!authOnly) {
+        if (!credentialBound) receipt.auth = authentication;
+        const created = await transport.request(
+          "session.create",
+          sessionConfiguration(options.sessionId, profile, body, physicalWorkspace, home),
+        );
+        try {
+          requireState(
+            exactKeys(created, ["sessionId"], ["workspacePath", "capabilities"]) &&
+              created.sessionId === options.sessionId,
+            "Native session creation returned another identity.",
+          );
+        } catch (error) {
+          const projection = receipt.sessionCreateDiagnostics[0];
+          const predicates = {
+            result_shape: projection.predicates.result_shape,
+            exact_requested_session_id: projection.predicates.exact_requested_session_id,
+          };
+          receipt.hostRejection = boundedSessionDiagnostic({
+            origin: "session-create-result",
+            errorCode: "AP_REVIEW_PROTOCOL_STATE_REJECTED",
+            rawResponseBytes: projection.rawResponseBytes,
+            rawResponseSha256: projection.rawResponseSha256,
+            predicateEvidence: "result-projection",
+            predicates,
+            failedPredicates: Object.keys(predicates).filter((key) => !predicates[key]),
+          });
+          throw error;
+        }
+        receipt.nativeSessionId = created.sessionId;
+        const initialized = await transport.request("session.tools.initializeAndValidate", {
+          sessionId: options.sessionId,
+        });
+        requireState(exactKeys(initialized, []), "Native initialization response is unsupported.");
+        const before = await readState(transport, options.sessionId, profile, body, receipt);
+        const after = await readState(transport, options.sessionId, profile, body, receipt);
+        requireState(
+          JSON.stringify(before) === JSON.stringify(after),
+          "Native profile or initialization state changed during observation.",
+        );
+        const finalAuthentication = await transport.request("auth.getStatus", {});
+        if (credentialBound) verifyCredentialBoundAuth(finalAuthentication, options.expectedLogin);
+        else verifyAuth(finalAuthentication, options.expectedLogin);
+        requireState(
+          observer.counts.sessionStarts === 1,
+          "Native session-start proof was not observed.",
+        );
+        observedState = after;
+      }
+    }
+    requireState(
+      sha256(await readFile(localProfile)) === options.profileSha256 &&
+        sha256(await readFile(executable)) === options.executableSha256,
+      "Native executable or staged profile changed during observation.",
+    );
+    if (connectOnly) {
+      receipt.status = "connect-only-observed-review-blocked";
+    } else if (authOnly) {
+      receipt.status = "auth-only-observed-review-blocked";
+    } else {
+      receipt.state = observedState;
+      await transport.request("runtime.shutdown", {});
+      receipt.status = credentialBound
+        ? "credential-bound-state-observed-review-blocked"
+        : "state-only-observed-review-blocked";
+    }
+  } catch (error) {
+    failure =
+      error instanceof AgentProofError
+        ? error
+        : new AgentProofError(
+            "AP_REVIEW_PROTOCOL_HOST_ERROR",
+            "Trusted native state observation failed.",
+          );
+    receipt.errorCode = failure.code;
+    transport?.abort();
+  } finally {
+    const exited = transport ? await transport.finish() : true;
+    if (transport) {
+      receipt.native = transport.metadata();
+      failure ??= transport.error;
+    }
+    if (!exited) {
+      failure ??= new AgentProofError(
+        "AP_REVIEW_PROTOCOL_EXIT_UNCONFIRMED",
+        "Native exit and stream closure are not both confirmed; owned runtime paths were retained.",
+      );
+      receipt.cleanup = {
+        status: "retained-unconfirmed-exit",
+        directoryName: basename(runtimeRoot),
+      };
+    } else if (runtimeIdentity) {
+      receipt.cleanup = await cleanupOwnedRuntime({
+        identity: runtimeIdentity,
+        nativeExitObserved: receipt.native?.exitObserved === true,
+        nativeStreamsClosed: receipt.native?.streamsClosed === true,
+        noProcessStarted: !transport || receipt.native?.spawnFailed === true,
+        remainingMilliseconds: transport
+          ? () => transport.remainingMilliseconds()
+          : () => Math.max(0, setupDeadline - performance.now()),
+      });
+      if (receipt.cleanup.status === "failed") {
+        failure ??= new AgentProofError(
+          "AP_REVIEW_PROTOCOL_CLEANUP_FAILED",
+          "Owned runtime cleanup failed after native exit.",
+        );
+      }
+    } else if (runtimeRoot) {
+      receipt.cleanup = {
+        status: "retained-unverified-path",
+        directoryName: basename(runtimeRoot),
+      };
+      failure ??= new AgentProofError(
+        "AP_REVIEW_PROTOCOL_CLEANUP_FAILED",
+        "Owned runtime identity is unverified; its path was retained.",
+      );
+    }
+    if (failure) {
+      receipt.status = "blocked";
+      receipt.errorCode = failure.code;
+      receipt.blockedReason = failure.message;
+    }
+    failureProvenance(receipt);
+    await writeFile(
+      join(
+        captureDirectory,
+        connectOnly
+          ? "protocol-connect-receipt.json"
+          : authOnly
+            ? "protocol-auth-receipt.json"
+            : credentialBound
+              ? "protocol-credential-state-receipt.json"
+              : "protocol-state-receipt.json",
+      ),
+      `${JSON.stringify(receipt, null, 2)}\n`,
+      { flag: "wx", mode: 0o600 },
+    );
+  }
+  if (failure) throw failure;
+  return receipt;
+}

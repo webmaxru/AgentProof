@@ -1,22 +1,33 @@
 # AgentProof Copilot plugin
 
-AgentProof packages four read-only reviewer profiles, two release-evidence skills, and the Evidence Board canvas. Deterministic repository code computes the gate; the plugin helps people inspect and coordinate the evidence.
+AgentProof packages three tool-free public-packet specialist profiles, a legacy
+coordination profile, two release-evidence skills, and the Evidence Board canvas.
+Deterministic repository code computes the gate; the plugin helps people inspect
+and coordinate the evidence.
 
 ## Components
 
-- `test-reviewer`: reviews normalized test and coverage evidence.
-- `security-reviewer`: reviews normalized dependency findings and the relevant diff.
-- `policy-reviewer`: maps evidence to the protected policy without claiming certification.
-- `evidence-assembler`: verifies one repository/PR/SHA/policy scope and loads the canvas.
+- `test-reviewer`: public-packet test and coverage notes; zero tools.
+- `security-reviewer`: public-packet dependency notes; no scan or source/diff access.
+- `policy-reviewer`: public-packet policy/provenance notes, not certification.
+- `evidence-assembler`: legacy broad-tool coordination profile, unsupported without separately enforced host isolation; not part of packet mode.
 - `release-evidence`: fail-closed evidence collection and review runbook.
 - `exception-review`: strict, human-submitted disposition command runbook.
 - `evidence-board`: mutable coordination canvas with five schema-validated actions.
 
-The three specialist reviewer profiles omit shell, edit, push, merge, approval,
-and GitHub mutation tools and now stop with `UNSAFE_TOOL_BOUNDARY` if a host
-injects any of them at runtime. The assembler instead receives only the canvas
-discovery/open/action tools. Host-level tool injection must still be validated;
-profile declarations alone are not an effective-permission proof.
+The `0.3.0` specialists are named **AgentProof Public Packet
+Test/Security/Policy Reviewer**, declare `tools: []`, and stop with
+`UNSAFE_TOOL_BOUNDARY` if any callable tool is exposed or the boundary is
+uncertain. The old `0.2.1` `read`/`search`/`github/*` mode is deprecated, not a
+supported read-only runtime. The legacy assembler still declares broad tools;
+do not mistake it for a narrowly scoped canvas-only agent.
+
+Use the [trusted-host packet integration](../docs/public-packet-review.md) for
+native source resolution, fixed CLI exclusions, native zero-tool/zero-call
+verification, and freshness checks. The reviewer never fetches or self-attests
+these facts. Profile installation alone does not activate this host integration,
+prove App isolation, or satisfy any automation save gate. Live validation of the
+revised profiles remains separate; unit fixtures are not native live proof.
 
 ## Install
 

@@ -23,6 +23,16 @@ do not emit `schemaVersion`, `documentType`, or `artifact`. Trusted deterministi
 code validates the input, adds those fields and the canonical digest, and
 produces `documentType: review-fragment`.
 
+In `0.3.0` [public-packet mode](public-packet-review.md), the specialist has no
+tools. A trusted host independently resolves native identity, protected policy
+and artifact records, enforces zero callable tools, and verifies native
+zero-tool/zero-call execution and final freshness. It accepts only the closed
+fragment input with the supplied session link/timestamp and every scoped
+finding's exact `ID: state`. Model self-report is not runtime evidence.
+The unchanged canonical fragment/assembly contract does not by itself prove
+where a model ran or whether tools were excluded. Public export verification
+and wrapping remain separate host responsibilities.
+
 Key final-evidence fields:
 
 | Field                             | Required meaning                                                                                                                                                |
